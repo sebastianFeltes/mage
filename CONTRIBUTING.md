@@ -28,9 +28,11 @@ cp .env.example .env     # solo si vas a pegarle a un LLM
 
 ## Áreas donde ayudar
 
-- Nuevas tools WASM (AssemblyScript en `wasm/`)
-- Patrones fast path en `src/loop/fastpath.ts`
-- Tests de integración con FalkorDB
-- Documentación y ejemplos
+- Fast path como clasificador (no más regex de marketing): `src/loop/fastpath.ts` — ver `docs/PRODUCTO.md` §2.4
+- Evals y golden traces (`tests/evals/`) con `MAGE_PROVIDER=stub`
+- Documentación y el wedge de ejemplo (`examples/http-kpi`)
+- No: palíndromos/primos nuevos, filesystem/git/MCP, Falkor “porque sí”
 
-Ver [docs/COMO.md](docs/COMO.md) y [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Ver [docs/COMO.md](docs/COMO.md), [docs/PRODUCTO.md](docs/PRODUCTO.md) y [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+Invariantes: `proposedAnswer` nunca es `answer`; sin evidence → `refused`; el planner no escribe memoria. Si un PR viola eso, se revierte.

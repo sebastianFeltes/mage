@@ -29,6 +29,22 @@ describe("shell slash commands", () => {
     expect(parseSlashCommand("/stream on")).toEqual({ kind: "stream", on: true });
   });
 
+  test("ingest en shell sin ir al LLM", () => {
+    expect(parseSlashCommand("ingest --file examples/http-kpi/facts.json")).toEqual({
+      kind: "ingest",
+      file: "examples/http-kpi/facts.json",
+    });
+    expect(parseSlashCommand("/ingest --file examples/http-kpi/facts.json")).toEqual({
+      kind: "ingest",
+      file: "examples/http-kpi/facts.json",
+    });
+  });
+
+  test("clear y flags no van al LLM", () => {
+    expect(parseSlashCommand("clear")?.kind).toBe("clear");
+    expect(parseSlashCommand("--verbose --json")?.kind).toBe("unknown");
+  });
+
   test("no slash → null", () => {
     expect(parseSlashCommand("hola")).toBeNull();
   });

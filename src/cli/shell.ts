@@ -1,9 +1,11 @@
+import { readFile } from "node:fs/promises";
 import { stderr as errOut, stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import type { MageEvent } from "../loop/events";
 import type { MageResult, MageRuntime } from "../loop/metacog";
 import { runMage } from "../loop/metacog";
 import { MageApiError } from "../llm/provider";
+import { parseIngestJson } from "../memory/ingest";
 import { createSession, getSession, getSessionStore } from "../session/store";
 
 export type ShellState = {
@@ -18,6 +20,7 @@ export type SlashCmd =
   | { kind: "exit" }
   | { kind: "status" }
   | { kind: "seed" }
+  | { kind: "ingest"; file: string }
   | { kind: "verbose"; on?: boolean }
   | { kind: "json"; on?: boolean }
   | { kind: "stream"; on?: boolean }
@@ -36,6 +39,11 @@ const BOOL = (s: string): boolean | undefined => {
 
 export const parseSlashCommand = (line: string): SlashCmd | null => {
   const t = line.trim();
+  const ingestBare = parseIngestLine(t);
+  if (ingestBare) return ingestBare;
+  if (t === "clear") return { kind: "clear" };
+  if (/^--/.test(t)) return { kind: "unknown", raw: t };
+
   if (!t.startsWith("/") && !t.startsWith(":")) return null;
   const body = t.slice(1).trim();
   if (!body || body === "?" || body === "help") return { kind: "help" };
@@ -49,6 +57,11 @@ export const parseSlashCommand = (line: string): SlashCmd | null => {
   const [head, ...rest] = body.split(/\s+/);
   const tail = rest.join(" ").trim();
 
+  if (head === "ingest") {
+    const fileIdx = rest.indexOf("--file");
+    const file = fileIdx >= 0 ? rest[fileIdx + 1] : rest[0];
+    return { kind: "ingest", file: file ?? "" };
+  }
   if (head === "verbose" || head === "v") {
     return { kind: "verbose", on: rest[0] ? BOOL(rest[0]) : undefined };
   }
@@ -67,6 +80,12 @@ export const parseSlashCommand = (line: string): SlashCmd | null => {
   }
 
   return { kind: "unknown", raw: body };
+};
+
+const parseIngestLine = (line: string): Extract<SlashCmd, { kind: "ingest" }> | null => {
+  const m = /^(?:\/)?ingest(?:\s+--file)?\s+(\S+)/i.exec(line);
+  if (!m) return null;
+  return { kind: "ingest", file: m[1]! };
 };
 
 const fmtMs = (n: number): string => `${n < 10 ? n.toFixed(1) : Math.round(n)}ms`;
@@ -120,7 +139,8 @@ export const shellBanner = (rt: MageRuntime, state: ShellState): string => {
 export const shellHelp = `Comandos internos:
   /help              esta ayuda
   /status            proveedor, grafo, tools, session
-  /seed              datos demo en grafo+vectores
+  /seed              datos demo en grafo
+  /ingest --file f   sembrar hechos (sin LLM)
   /new               nueva sesión
   /session           muestra sessionId actual
   /history [n]       últimos n turnos (default 6)
@@ -132,6 +152,8 @@ export const shellHelp = `Comandos internos:
   /exit              salir
 
 Consulta normal: escribe en lenguaje natural y Enter.
+Aritmética va directo a WASM. ingest --file ... también funciona sin /.
+Flags CLI (--json, --verbose) van en la invocación, no dentro del shell.
 También: exit, quit`;
 
 const formatStreamEvent = (e: MageEvent): string | null => {
@@ -225,6 +247,33 @@ export const runShell = async (
             output.write(`seed: ${n} nodos + relaciones demo\n`);
           }
           break;
+        case "ingest": {
+          if (!slash.file) {
+            console.error("uso: /ingest --file examples/http-kpi/facts.json");
+            break;
+          }
+          try {
+            const raw = JSON.parse(await readFile(slash.file, "utf8")) as unknown;
+            const req = parseIngestJson(raw);
+            if (req.facts.length === 0) {
+              console.error("facts[] vacío");
+              break;
+            }
+            const result = rt.facts.ingest(req);
+            output.write(`ingest: ${result.upserted} hechos\n`);
+            if (result.conflicts.length > 0) {
+              console.error(`conflictos: ${result.conflicts.map((c) => c.name).join(", ")}`);
+            }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes("ENOENT") || msg.includes("no such file")) {
+              console.error(`archivo no encontrado: ${slash.file}  (es examples/http-kpi/facts.json)`);
+            } else {
+              console.error(msg);
+            }
+          }
+          break;
+        }
         case "new":
         case "clear":
           state.sessionId = createSession(rt.config).id;
@@ -283,7 +332,11 @@ export const runShell = async (
           }
           break;
         case "unknown":
-          console.error(`comando desconocido: /${slash.raw}  (prueba /help)`);
+          if (slash.raw.startsWith("--")) {
+            console.error("los flags (--json, --verbose) van al invocar mage, no dentro del shell. Prueba /json on o /verbose on");
+          } else {
+            console.error(`comando desconocido: /${slash.raw}  (prueba /help)`);
+          }
           break;
       }
       prompt();

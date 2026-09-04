@@ -1,40 +1,54 @@
 # Mage — Cómo usarlo
 
-Guía práctica del flujo metacognitivo: memoria (grafo + vectores), LLM, sandbox WASM.
+Guía práctica del kernel plan+verify. Camino feliz: Bun, SQLite, sin Docker. El LLM es opcional (stub o fast path).
+
+Versión 0.3.0. Frase de producto: Mage verifica afirmaciones de un dominio y se niega cuando no puede.
 
 ## Requisitos
 
-- [Bun](https://bun.sh) 1.1+
-- [Docker](https://docs.docker.com/get-docker/) (para FalkorDB / memoria en grafo)
-- API key de un proveedor LLM (esta guía usa **Gemini**)
+- [Bun](https://bun.sh) ≥ 1.1
+- API key de un LLM **solo** si vas a planear en lenguaje natural (Gemini / Anthropic / OpenAI). Para clonar y ver el contrato: stub, sin key.
+- Docker **no** hace falta. FalkorDB es opcional (`MAGE_GRAPH=falkor`).
 
-## 1. Instalación
+## 1. Probar en 2 minutos (sin API key)
 
 ```bash
-cd mage
-bun install
-bun run build:wasm   # compila plugins/toolkit.wasm (calc, hash, json_validate)
+git clone https://github.com/sebastianFeltes/mage.git && cd mage
+bun install && bun run build:wasm
+bun test                          # 91 tests, sin red
+./bin/mage "(12+8)*3"             # → 60   fast path WASM, 0 tokens
+MAGE_PROVIDER=stub ./bin/mage "cuál es el PIB de Francia"
+# stderr: refused: no_evidence
 ```
 
-### Comando `mage` en la terminal
+Hechos de un cliente (el valor de producto):
+
+```bash
+./bin/mage ingest --file examples/http-kpi/facts.json
+MAGE_PROVIDER=stub MAGE_STUB_PLAN='{"thought":"lookup","confidence":1,"toolCalls":[{"tool":"kpi.lookup","input":{"name":"arr"},"reason":"kpi"}],"proposedAnswer":"999"}' \
+  ./bin/mage "cuál es el ARR"
+# → 1200000   (el 999 del modelo no sale)
+```
+
+Sin semilla, el mismo plan → `refused` / `not_found`.
+
+### Comando `mage`
 
 | Forma | Cuándo |
 |-------|--------|
-| `./bin/mage` | Desde el repo, sin instalar nada más |
+| `./bin/mage` | Desde el repo |
 | `bun run mage` | Alias npm |
-| `bun link` → `mage` | Global en PATH (ejecutar una vez desde el repo) |
+| `bun link` → `mage` | Global en PATH (una vez desde el repo) |
 
-Sin argumentos entras al **shell interactivo** (runtime caliente: WASM + DB ya cargados).
+Sin argumentos: **shell** (runtime caliente). `ingest --file` y la aritmética no llaman al LLM.
 
 ```bash
 ./bin/mage
-# mage shell — consultas, /help para comandos
 # mage> /status
-# mage> ¿Qué es FastPath?
+# mage> ingest --file examples/http-kpi/facts.json
+# mage> 12-3
 # mage> /exit
 ```
-
-Comandos internos del shell: `/help`, `/status`, `/seed`, `/verbose`, `/json`, `/script`, `/exit`.
 
 ## 2. Variables de entorno
 
@@ -42,341 +56,235 @@ Comandos internos del shell: `/help`, `/status`, `/seed`, `/verbose`, `/json`, `
 cp .env.example .env
 ```
 
-Edita `.env`:
+Mínimo para un LLM:
 
 ```env
 MAGE_PROVIDER=gemini
 GOOGLE_GENERATIVE_AI_API_KEY=tu_clave_aqui
-
 MAGE_FAST_MODEL=gemini-3.6-flash
-MAGE_REASON_MODEL=gemini-3.1-pro-preview
-MAGE_EMBED_PROVIDER=none          # rápido; usa "gemini" para embeddings cloud
-
-FALKOR_HOST=127.0.0.1
-FALKOR_PORT=6379
-FALKOR_GRAPH=mage
+MAGE_EMBED_PROVIDER=none
+MAGE_GRAPH=sqlite
 ```
 
-> `.env` está en `.gitignore`. **Nunca** commitees claves API.
+`.env` está en `.gitignore`. **Nunca** commitees claves.
 
-## 3. Memoria (SQLite por defecto)
+`proposedAnswer` del modelo **nunca** es la respuesta. Sin tool OK, Mage calla.
 
-No hace falta Docker. El grafo vive en `./data/facts.sqlite` (`MAGE_GRAPH=sqlite`).
+## 3. Memoria de producto: ingest, no el grafo demo
+
+La memoria que importa es **`Fact`**: `name`, `value`, `source`, `tenantId`. La escribe un humano o `POST /v1/memory`. El planner no puede `memory.ingest`.
 
 ```bash
-bun src/cli.ts status
+./bin/mage ingest --file examples/http-kpi/facts.json
+# ingest: 10 hechos
 ```
 
-Salida esperada:
+Contradicción (mismo `name`, otro `value`) → conflicto, **no pisa**.
 
-```
-graph: sqlite
-vectors: none
-```
+`./bin/mage seed` siembra 3 nodos de grafo (Mage / FastPath / WasmTimeout). Es demo de grafo, no el wedge. Para un colega, usá ingest.
 
-FalkorDB es opcional: `MAGE_GRAPH=falkor` y `docker compose up -d`. Si el host no responde, `graph: off`. Embeddings semánticos solo si `MAGE_EMBED_PROVIDER` no es `none` (el default no usa FNV como RAG).
-
-## 4. Sembrar datos demo
+Grafo: SQLite en `./data` (`MAGE_GRAPH=sqlite`). Falkor: `MAGE_GRAPH=falkor` y `docker compose up -d`. Si el host no responde, `graph: off`. Embeddings solo si `MAGE_EMBED_PROVIDER` no es `none`.
 
 ```bash
-bun src/cli.ts seed
-# → seed: 3 nodos + relaciones demo
+./bin/mage status
+# graph: sqlite
+# vectors: none
 ```
 
-Crea en el grafo:
-
-| Nodo | Tipo | Texto |
-|------|------|-------|
-| Mage | Entidad | Motor metacognitivo en Bun |
-| FastPath | Concepto | Respuesta WASM sin LLM |
-| WasmTimeout | Hecho | Sandbox limitado a 50ms |
-
-Relaciones:
-
-```
-(Mage)-[:DEPENDE_DE]->(FastPath)
-(Mage)-[:RELACIONADO_CON]->(WasmTimeout)
-(FastPath)-[:PREFIERE]->(WasmTimeout)
-```
-
-También escribe nodos/edges en el SQLite de facts. Vectores cloud solo si `MAGE_EMBED_PROVIDER` no es `none`.
-
-## 5. Probar la memoria (sin LLM)
-
-```bash
-bun -e "
-import { loadConfig } from './src/config.ts';
-import { createGraphStore } from './src/memory/sqlite-graph.ts';
-import { HybridMemory } from './src/memory/hybrid.ts';
-import { VectorMemory } from './src/memory/vectors.ts';
-
-const cfg = loadConfig();
-const graph = createGraphStore(cfg);
-const vectors = new VectorMemory(cfg);
-await graph.connect();
-await graph.seed();
-await vectors.open();
-const hybrid = new HybridMemory(cfg, graph, vectors);
-console.log(hybrid.toPromptChunks(await hybrid.search('Mage FastPath')));
-"
-```
-
-Salida esperada (aprox.):
-
-```
-- [graph] Entidad:Mage Motor metacognitivo en Bun
-- [graph] Concepto:FastPath Respuesta WASM sin LLM
-- [graph] Hecho:WasmTimeout Sandbox limitado a 50ms
-```
-
-La búsqueda híbrida corre en **paralelo** (grafo + vectores) con presupuesto de **25 ms** (`MAGE_ENRICH_BUDGET_MS`).
-
-## 6. Flujo completo (memoria + LLM + sandbox)
-
-### Consulta que usa memoria
-
-```bash
-bun src/cli.ts --verbose "¿Qué es Mage y cómo se relaciona con FastPath?"
-```
-
-### Qué ocurre por dentro
+## 4. Flujo de una consulta
 
 ```
 Consulta
    │
-   ├─► Fast path? (math/hash/json) ──► WASM directo, 0 tokens LLM
+   ├─► Fast path? (math/hash/json) ──► WASM, 0 tokens
    │
-   └─► Enriquecimiento (≤25 ms)
-   │      ├─ FalkorDB: nodos por nombre + vecinos 1-hop
-   │      └─ sqlite-vec: similitud local
+   └─► Enrich (≤25 ms): facts del tenant + grafo SQLite
    │
-   ├─► LLM (gemini-3.6-flash): plan JSON (Zod)
-   │      ├─ toolCalls → sandbox WASM (≤50 ms c/u)
-   │      └─ proposedAnswer
+   ├─► LLM: plan JSON (Zod). proposedAnswer es borrador, no answer
+   │      toolCalls → dispatch (input+output Zod)
+   │      planner no ve memory.ingest ni tools de demo
    │
-   ├─► ¿Error sandbox? → autocorrección silenciosa (hasta 3 intentos)
+   ├─► ¿Tool falló? → corrección (hasta 3 intentos)
    │
-   └─► Respuesta + persistencia async (nodos/relaciones nuevos)
+   └─► finalizeResult
+          evidence positiva → status: answered
+          si no            → status: refused
 ```
 
-### Ejemplo real (con memoria levantada)
-
-```
-enrich=4ms   plan=10062ms   sandbox=0ms   attempts=1
-
-Respuesta: Mage es un motor metacognitivo en Bun. FastPath es un mecanismo
-WASM que responde sin invocar al LLM...
-```
-
-El LLM recibió el contexto del grafo en el prompt; no necesitó llamar `memory.search` como tool porque el enrich ya inyectó los hits.
-
-### Consulta con sandbox
-
-```bash
-bun src/cli.ts --verbose 'valida con calc: 0.1+0.2'
-# → 0.30000000000000004  (sandbox ~2 ms)
-```
+El loop **no** persiste `memoryCandidates` del plan.
 
 ### Fast path (sin LLM)
 
-Estas consultas van **directo al sandbox WASM** (~2–5 ms), sin llamar a Gemini:
-
 | Consulta ejemplo | Tool |
 |------------------|------|
-| `cuánto es (12+8)*3` | `calc` |
-| `valida con calc: 500000 + 9` | `calc` |
-| `cuantas letras R tiene la palabra foo` | `count_letter` |
-| `verifica si anita lava la tina es palindromo` | `is_palindrome` |
-| `primer numero primo mayor a 500.000` | `next_prime` |
+| `cuánto es (12+8)*3` / `(12+8)*3` | `calc` |
+| `valida con calc: 0.1+0.2` | `calc` |
 | `hash de mage` | `hash` |
 | `{ "a": 1 }` | `json_validate` |
 
-En `--verbose` verás `tools=calc fastpath` y `sandbox=2ms` (no `sandbox=0`).
+Palíndromo / contar letras / primo siguen compilados para el fast path; **no** son el pitch. En `--verbose` verás `tools=calc fastpath`.
 
 ```bash
-bun src/cli.ts "cuánto es (12+8)*3"
-# → 60  (total ~3 ms tras boot)
+./bin/mage "(12+8)*3"
+# → 60
 ```
 
-## 7. Salida estructurada
+### Consulta con sandbox (LLM o stub)
 
 ```bash
-bun src/cli.ts --json "¿Qué es Mage?"
+./bin/mage --verbose 'valida con calc: 0.1+0.2'
+# → 0.30000000000000004
 ```
 
-Devuelve `answer`, `plan` (thought, toolCalls, memoryCandidates, relationCandidates) y `timings`.
-
-## 8. API HTTP
+## 5. Shell interactivo
 
 ```bash
-bun src/cli.ts serve          # http://127.0.0.1:3920
-# o: bun run serve
+./bin/mage
+./bin/mage --verbose
+./bin/mage --json "cuál es el ARR"
 ```
 
-`MAGE_API_KEY` opcional. Si está seteada, `/v1/*` exige `Authorization: Bearer`. `/health` no. Bind que no sea loopback sin key → el proceso no arranca. CORS cerrado (no `*`). Rate limit 60 req/min/IP en `/v1/query*`. `script.run` no se prende con `serve`.
+Dentro:
+
+```
+/help               esta ayuda
+/status             proveedor, grafo, tools, session
+/ingest --file f    sembrar hechos (sin LLM)
+/seed               nodos demo en grafo
+/new  /clear        nueva sesión
+/session            sessionId actual
+/history [n]        últimos n turnos
+/verbose [on|off]   timings en stderr
+/json [on|off]      salida estructurada
+/stream [on|off]    progreso en stderr
+/script <código>    Bun aislado (si MAGE_SCRIPT_ENABLED=1)
+/exit               salir
+```
+
+`ingest --file examples/http-kpi/facts.json` también funciona **sin** `/`. `clear` sin barra nueva sesión. Líneas que empiezan con `--` no van al LLM: los flags (`--json`, `--verbose`) van al invocar `mage`, no en el prompt.
+
+También: `exit`, `quit`. Equivalente: `bun src/cli.ts --repl`.
+
+## 6. Salida estructurada
+
+```bash
+./bin/mage --json "cuál es el PIB de Francia"
+```
+
+`MageResult`: `status`, `answer`, `refusalReason`, `evidence`, `plan`, `timings`, `sessionId`, `tenantId`. Un cliente puede ignorar `thought`.
+
+```json
+{
+  "status": "refused",
+  "answer": "",
+  "refusalReason": "no_evidence",
+  "evidence": [],
+  "plan": { "thought": "…", "toolCalls": [] },
+  "timings": { "bootMs": 0, "enrichMs": 0, "planMs": 0, "sandboxMs": 0, "totalMs": 0, "attempts": 1, "usedReasonModel": false }
+}
+```
+
+## 7. API HTTP
+
+```bash
+./bin/mage serve          # http://127.0.0.1:3920
+```
+
+Loopback por defecto. Si `MAGE_HOST` no es local, hace falta `MAGE_API_KEY`. Con key, `/v1/*` exige `Authorization: Bearer` (`/health` no). CORS cerrado (nunca `*`). Rate limit 60 req/min/IP en `/v1/query*`. `Idempotency-Key` en `POST /v1/query` (TTL 5 min). `script.run` **no** se prende con `serve`.
 
 | Endpoint | Método | Body | Descripción |
 |----------|--------|------|-------------|
-| `/health` | GET | — | Estado, tools, boot |
-| `/v1/query` | POST | `{"query":"..."}` | Respuesta JSON completa |
-| `/v1/query/stream` | POST | `{"query":"..."}` | SSE (start → answer → done) |
+| `/health` | GET | — | Estado, tools, boot, `metrics` (`answered` / `refused` / `withEvidence`) |
+| `/v1/query` | POST | `{ query, sessionId?, tenantId? }` | `MageResult` |
+| `/v1/query/stream` | POST | igual | SSE (`done` = mismo `MageResult`) |
+| `/v1/memory` | POST | `{ tenantId, source, facts[] }` | `{ upserted, conflicts }` |
+| `/v1/sessions` | POST | `{ tenantId? }` | `{ sessionId, tenantId, createdAt }` |
+| `/v1/sessions/:id` | GET | `?tenantId=` | sesión + `turns[]` + `summary` |
+| `/v1/sessions/:id` | DELETE | — | `{ ok: true }` |
 
 ```bash
-curl -s http://127.0.0.1:3920/health | jq
+./bin/mage serve
+
+curl -s -X POST http://127.0.0.1:3920/v1/memory \
+  -H 'Content-Type: application/json' \
+  -d @examples/http-kpi/facts.json
+
 curl -s -X POST http://127.0.0.1:3920/v1/query \
   -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer $MAGE_API_KEY" \
-  -d '{"query":"¿Qué es FastPath?"}' | jq .answer
+  -d '{"query":"(12+8)*3"}'
+
+curl -s http://127.0.0.1:3920/health
 ```
 
-El servidor reutiliza un **runtime caliente** (WASM + DB ya abiertos).
+Con key: `-H "Authorization: Bearer $MAGE_API_KEY"`. El servidor reutiliza un runtime caliente.
 
-## 9. Shell interactivo
+## 8. Librería
 
-```bash
-mage                    # o ./bin/mage
-mage --verbose          # shell con timings
-mage "consulta única"   # una pregunta y sale
+```typescript
+import { mage } from "mage";
+
+const r = await mage("cuál es el ARR", { tenantId: "acme" });
+if (r.status === "answered") console.log(r.answer, r.evidence);
+else console.log("calló", r.refusalReason);
 ```
 
-Dentro del shell:
-
-```
-mage> /status
-mage> /seed
-mage> /verbose on
-mage> cuánto es 7*6
-mage> ¿qué es Mage?
-mage> /script return [1,2,3].reduce((a,b)=>a+b,0)
-mage> /exit
-```
-
-También funciona `bun src/cli.ts --repl` (equivalente).
-
-## 10. Interpretar timings
+## 9. Interpretar timings
 
 | Campo | Qué mide |
 |-------|----------|
-| `bootMs` | Carga WASM + conexión DB (solo 1ª vez por proceso) |
-| `enrichMs` | Búsqueda híbrida grafo+vectores |
-| `planMs` | Llamada LLM (plan o corrección) |
-| `sandboxMs` | Ejecución WASM |
-| `totalMs` | Latencia total de la consulta |
-| `attempts` | Pasadas del bucle (autocorrección) |
+| `bootMs` | Carga WASM + DB (1ª vez por proceso) |
+| `enrichMs` | Facts + grafo (presupuesto 25 ms) |
+| `planMs` | Llamada LLM (0 en fast path / stub local) |
+| `sandboxMs` | Ejecución de tools |
+| `totalMs` | Latencia de la consulta |
+| `attempts` | Pasadas del bucle |
 
-## 11. Troubleshooting
+## 10. Sesiones multi-turno
 
-| Síntoma | Causa | Solución |
-|---------|-------|----------|
-| `graph: off` | Pediste Falkor y no está | `MAGE_GRAPH=sqlite` (default) o `docker compose up -d` |
-| `gemini-2.5-flash` 404 | Modelo deprecado | Usar `gemini-3.6-flash` en `.env` |
-| 503 high demand | Saturación API gratuita | Reintenta; usa fast path (tabla arriba) que no necesita LLM |
-| Quota exceeded (429) | Límite free tier Gemini (~20 req) | Ver §15: Ollama, `mage script`, offline quicksort, o esperar |
-| Respuesta lenta (~10–45 s) | Latencia cloud LLM | Normal en tier free; fast path evita LLM en math/hash |
-| `plugins/toolkit.wasm` missing | WASM no compilado | `bun run build:wasm` |
-
-## 12. Comandos útiles
-
-```bash
-bun test                    # tests unitarios + HTTP
-bun run build:wasm          # recompilar toolkit AssemblyScript
-docker compose down         # apagar FalkorDB
-docker compose logs -f      # logs del grafo
-```
-
-## 14. script.run — experimental, no es un sandbox
-
-Default **off**. `mage serve` no lo habilita. No forma parte del pitch ni de las recetas HTTP.
-
-Si lo prendés a mano (`MAGE_SCRIPT_ENABLED=1`) corre TypeScript en un subproceso Bun con blocklist y timeout. Eso **no** es aislamiento de producción. El wedge de producto usa tools host + SQLite, no este camino.
-
-## 15. Cuota Gemini agotada
-
-Mage ya no muestra stack trace. Orden de fallback:
-
-1. **Ollama** (`MAGE_FALLBACK_OLLAMA=1`, activo por defecto):
-   ```bash
-   ollama pull llama3.2
-   bun src/cli.ts status   # ollama: llama3.2 @ ...
-   ```
-
-2. **Offline** (sin LLM): quicksort/ordena con array `[n,n,n]` → `script.run` automático.
-
-3. **CLI directo**:
-   ```bash
-   bun src/cli.ts script 'const a=[3,1,4,1,5]; return a.sort((x,y)=>x-y);'
-   ```
-
-4. **Esperar** el tiempo que indica el error (~47s en free tier).
-
-## 16. Sesiones multi-turno
-
-Cada consulta puede pertenecer a una **sesión** con historial de turnos user/assistant.
-
-### Variables
+Viven en SQLite (`MAGE_SESSION_PATH`, default `./data/sessions.sqlite`). Reiniciar `mage serve` **no** borra el historial. Al pasar el máximo de turnos se compacta: `summary` (factIds, lastStatus, lastEvidenceIds) + últimos 6 turnos en el prompt.
 
 | Variable | Default | Descripción |
 |----------|---------|-------------|
 | `MAGE_SESSION_ENABLED` | `1` | Activar sesiones |
-| `MAGE_SESSION_MAX_TURNS` | `20` | Turnos máx. en prompt |
-| `MAGE_SESSION_TTL_MS` | `86400000` | TTL in-memory (24h) |
-| `MAGE_SESSION_PATH` | `./data/sessions` | Reservado (persistencia Fase 2) |
-
-### Shell
+| `MAGE_SESSION_STORE` | `sqlite` | `sqlite` \| `memory` |
+| `MAGE_SESSION_PATH` | `./data/sessions.sqlite` | Archivo SQLite |
+| `MAGE_SESSION_MAX_TURNS` | `20` | Umbral de compaction |
+| `MAGE_SESSION_TTL_MS` | `86400000` | TTL |
 
 ```bash
-mage
-mage> ¿Qué es Mage según la memoria?
-mage> ¿y cómo se relaciona con WasmTimeout?
 mage> /history
-mage> /new          # nueva sesión
-mage> /session      # muestra sessionId
+mage> /new
+mage> /session
 ```
 
-### API
-
 ```bash
-# Crear sesión explícita
-curl -s -X POST http://127.0.0.1:3920/v1/sessions | jq
-
-# Consulta con sesión
+curl -s -X POST http://127.0.0.1:3920/v1/sessions
 curl -s -X POST http://127.0.0.1:3920/v1/query \
   -H 'Content-Type: application/json' \
-  -d '{"query":"hola","sessionId":"<uuid>"}' | jq .sessionId
-
-# Ver historial
-curl -s http://127.0.0.1:3920/v1/sessions/<uuid> | jq .turns
+  -d '{"query":"hola","sessionId":"<uuid>"}'
 ```
 
-Las sesiones viven **en memoria del proceso** — se pierden al reiniciar `mage serve`.
-
-## 17. Streaming SSE
-
-### CLI
+## 11. Streaming SSE
 
 ```bash
-mage --stream "valida con calc: 2**10"
-# stderr: [enrich] … [tool] calc ok … [done] 12ms
+./bin/mage --stream "valida con calc: 2**10"
+# stderr: [enrich] … [tool] calc … [done]
 # stdout: 1024
 ```
 
-En shell: `/stream on`
-
-### Contrato de eventos
+En shell: `/stream on`. El evento `done` es el contrato (mismo `MageResult` que sync).
 
 | Evento | Cuándo |
 |--------|--------|
-| `start` | Inicio de consulta |
-| `enrich` | Tras búsqueda memoria |
-| `plan_start` | Antes de LLM |
-| `plan_thought` | Thought parcial del plan |
-| `plan` | Plan JSON completo |
-| `tool_start` / `tool_end` | Ejecución sandbox |
-| `correction` | Autocorrección |
-| `answer` | Respuesta final |
+| `start` | Inicio |
+| `enrich` | Tras memoria |
+| `plan_start` / `plan_thought` / `plan` | LLM |
+| `tool_start` / `tool_end` | Tools |
+| `correction` | Reintento |
+| `answer` / `refuse` | Resultado |
 | `done` | `MageResult` completo |
 | `error` | Error amigable |
-| `ping` | Heartbeat cada 15s |
+| `ping` | Heartbeat 15s |
 
 ```bash
 curl -N -X POST http://127.0.0.1:3920/v1/query/stream \
@@ -384,86 +292,100 @@ curl -N -X POST http://127.0.0.1:3920/v1/query/stream \
   -d '{"query":"hash de mage"}'
 ```
 
-## 18. API reference
+## 12. script.run — experimental, no es un sandbox
 
-| Endpoint | Método | Body | Respuesta |
-|----------|--------|------|-----------|
-| `/health` | GET | — | `{ ok, graph, tools, bootMs, sessions }` |
-| `/v1/sessions` | POST | `{ tenantId? }` | `{ sessionId, tenantId, createdAt }` |
-| `/v1/sessions/:id` | GET | `?tenantId=` | `Session` con `turns[]` y `summary` |
-| `/v1/sessions/:id` | DELETE | — | `{ ok: true }` |
-| `/v1/query` | POST | `{ query, sessionId?, tenantId? }` | `MageResult` |
-| `/v1/query/stream` | POST | `{ query, sessionId?, tenantId? }` | SSE |
-| `/v1/memory` | POST | `{ tenantId, facts[], source }` | `{ upserted }` |
+Default **off**. `mage serve` no lo habilita. No forma parte del pitch ni de las recetas HTTP.
 
-### MageResult
+Si lo prendés (`MAGE_SCRIPT_ENABLED=1`) corre TypeScript en un subproceso Bun con blocklist y timeout. Eso **no** es aislamiento de producción. El wedge usa host tools + SQLite.
 
-```json
-{
-  "status": "answered",
-  "answer": "…",
-  "sessionId": "uuid",
-  "tenantId": "default",
-  "evidence": [{ "id": "…", "tool": "kpi.lookup", "output": { "found": true, "value": "1200000" } }],
-  "plan": { "thought": "…", "toolCalls": [] },
-  "timings": { "bootMs": 0, "enrichMs": 0, "planMs": 0, "sandboxMs": 0, "totalMs": 0, "attempts": 0, "usedReasonModel": false }
-}
+## 13. Sin LLM o con cuota agotada
+
+Orden, sin stack trace:
+
+1. **Stub** (tests y demo del contrato): `MAGE_PROVIDER=stub` + `MAGE_STUB_PLAN=…` como en §1.
+2. **Fast path / ingest:** math, hash, JSON, `mage ingest` — 0 tokens.
+3. **Otra key** (OpenAI / Anthropic) o esperar el retry de Gemini.
+4. **Ollama** (opt-in): `ollama pull llama3.2`, `MAGE_FALLBACK_OLLAMA=1`, servicio en `127.0.0.1:11434`. Mage sigue usando Gemini/OpenAI/Anthropic como primario y cae a llama si el cloud falla. Si Ollama no está corriendo, apagá el fallback (`MAGE_FALLBACK_OLLAMA=0`): si no, Gemini va a fallar igual.
+
+`mage script` solo si habilitaste `script.run` a mano.
+
+## 14. Troubleshooting
+
+| Síntoma | Causa | Solución |
+|---------|-------|----------|
+| `graph: off` | Pediste Falkor y no está | Default `MAGE_GRAPH=sqlite`; o `docker compose up -d` |
+| `refused: no_evidence` | Sin tool OK / sin fact | Esperado. Sembrar con ingest o preguntar algo del wedge |
+| `ingest` en el shell iba al LLM | Versión vieja o path `example/` | `examples/http-kpi/facts.json`; comando interceptado en 0.3 |
+| Quota exceeded (429) | Free tier Gemini | §13: stub, fast path, otra key, Ollama |
+| `gemini-2.5-flash` 404 | Modelo deprecado | `gemini-3.6-flash` |
+| Respuesta lenta (10–45 s) | Latencia cloud | Normal en free; fast path evita LLM |
+| `plugins/toolkit.wasm` missing | WASM no compilado | `bun run build:wasm` |
+| Bind no loopback sin key | Guard de boot | `MAGE_API_KEY` o `MAGE_HOST=127.0.0.1` |
+
+```bash
+bun test
+bun run build:wasm
+./bin/mage status
 ```
 
-## 19. Variables de entorno
+## 15. Variables de entorno
 
 | Variable | Default | Descripción |
 |----------|---------|-------------|
-| `MAGE_PROVIDER` | `gemini` | `gemini` \| `anthropic` \| `openai` |
-| `MAGE_FAST_MODEL` | por proveedor | Modelo rápido (plan) |
-| `MAGE_REASON_MODEL` | por proveedor | Modelo razonamiento |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | — | API key Gemini |
-| `ANTHROPIC_API_KEY` | — | API key Anthropic |
-| `OPENAI_API_KEY` | — | API key OpenAI |
+| `MAGE_PROVIDER` | `gemini` | `gemini` \| `anthropic` \| `openai` \| `stub` |
+| `MAGE_FAST_MODEL` | por proveedor | Modelo de plan |
+| `MAGE_REASON_MODEL` | por proveedor | Modelo de razonamiento |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | — | Gemini |
+| `ANTHROPIC_API_KEY` | — | Anthropic |
+| `OPENAI_API_KEY` | — | OpenAI |
 | `MAGE_EMBED_PROVIDER` | `none` | `none` \| `gemini` \| `openai` |
-| `MAGE_GRAPH` | `sqlite` | `sqlite` \| `falkor` \| `off`. Falkor solo si el host responde |
-| `FALKOR_HOST` | `127.0.0.1` | Host FalkorDB (solo con `MAGE_GRAPH=falkor`) |
-| `FALKOR_PORT` | `6379` | Puerto FalkorDB |
-| `FALKOR_GRAPH` | `mage` | Nombre del grafo |
-| `MAGE_VEC_PATH` | `./data/mage.vec.db` | DB vectores |
-| `MAGE_PORT` | `3920` | Puerto HTTP |
-| `MAGE_HOST` | `127.0.0.1` | Host HTTP |
-| `MAGE_API_KEY` | — | Bearer en `/v1/*`. Obligatoria si el bind no es loopback |
-| `MAGE_CORS_ORIGINS` | (vacío) | Allowlist CORS; nunca `*` |
-| `MAGE_RATE_LIMIT_PER_MIN` | `60` | Rate limit `/v1/query*` por IP |
-| `MAGE_REQUEST_TIMEOUT_MS` | `60000` | Timeout de request HTTP |
+| `MAGE_GRAPH` | `sqlite` | `sqlite` \| `falkor` \| `off` |
+| `FALKOR_HOST` / `PORT` / `GRAPH` | localhost:6379 / `mage` | Solo con `MAGE_GRAPH=falkor` |
+| `MAGE_FACTS_PATH` | `./data/facts.sqlite` | Hechos |
+| `MAGE_VEC_PATH` | `./data/mage.vec.db` | Vectores (si hay embed) |
+| `MAGE_PORT` / `MAGE_HOST` | `3920` / `127.0.0.1` | HTTP |
+| `MAGE_API_KEY` | — | Bearer `/v1/*`. Obligatoria si el bind no es loopback |
+| `MAGE_CORS_ORIGINS` | (vacío) | Allowlist; nunca `*` |
+| `MAGE_RATE_LIMIT_PER_MIN` | `60` | `/v1/query*` por IP |
+| `MAGE_REQUEST_TIMEOUT_MS` | `60000` | Timeout HTTP |
 | `MAGE_WASM_TIMEOUT_MS` | `50` | Timeout WASM |
 | `MAGE_ENRICH_BUDGET_MS` | `25` | Presupuesto enrich |
-| `MAGE_MAX_ATTEMPTS` | `3` | Reintentos autocorrección |
-| `MAGE_SCRIPT_ENABLED` | `0` | script.run experimental (no sandbox; no en serve) |
-| `MAGE_SCRIPT_TIMEOUT_MS` | `2000` | Timeout script.run |
-| `MAGE_FALLBACK_OLLAMA` | `1` | Fallback a Ollama |
-| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434/v1` | URL Ollama |
-| `MAGE_OLLAMA_MODEL` | `llama3.2` | Modelo Ollama |
-| `MAGE_SESSION_ENABLED` | `1` | Sesiones multi-turno |
-| `MAGE_SESSION_MAX_TURNS` | `20` | Turnos en prompt |
-| `MAGE_SESSION_TTL_MS` | `86400000` | TTL sesiones |
+| `MAGE_MAX_ATTEMPTS` | `3` | Reintentos |
+| `MAGE_SCRIPT_ENABLED` | `0` | script.run; no en serve |
+| `MAGE_SCRIPT_TIMEOUT_MS` | `2000` | Timeout script |
+| `MAGE_FALLBACK_OLLAMA` | `1` | Tras fallo cloud, intenta Ollama (hace falta `ollama serve` + modelo) |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434/v1` | API compatible OpenAI |
+| `MAGE_OLLAMA_MODEL` | `llama3.2` | Modelo local |
+| `MAGE_SESSION_ENABLED` | `1` | Sesiones |
+| `MAGE_SESSION_STORE` | `sqlite` | `sqlite` \| `memory` |
+| `MAGE_SESSION_PATH` | `./data/sessions.sqlite` | Archivo de sesiones |
+| `MAGE_SESSION_MAX_TURNS` | `20` | Compaction |
+| `MAGE_SESSION_TTL_MS` | `86400000` | TTL |
 
-## 20. Contribuir
-
-Ver [CONTRIBUTING.md](../CONTRIBUTING.md), [ARCHITECTURE.md](ARCHITECTURE.md) y [SECURITY.md](../SECURITY.md).
+## 16. Mapa del repo
 
 ```
 src/
-  cli.ts              # CLI: consulta, shell, serve, status, seed
-  cli/shell.ts        # Shell interactivo + comandos /
-  server.ts           # API HTTP Bun
-  session/            # Sesiones multi-turno (in-memory)
-  loop/metacog.ts     # Bucle metacognitivo + eventos
-  loop/events.ts      # Contrato MageEvent
-  loop/fastpath.ts    # Atajo WASM sin LLM
-  memory/graph.ts     # FalkorDB (Cypher)
-  memory/vectors.ts   # sqlite-vec
-  memory/hybrid.ts    # Búsqueda paralela con presupuesto
-  sandbox/pool.ts     # Pool de plugins WASM
-  tools/registry.ts   # Catálogo de tools (wasm + host)
+  cli.ts              # consulta, ingest, seed, serve, status
+  cli/shell.ts        # shell: /ingest, /status, …
+  server.ts           # HTTP /v1
+  loop/metacog.ts     # bucle
+  loop/result.ts      # finalizeResult (único que fabrica answer)
+  loop/fastpath.ts    # atajo WASM
+  memory/ingest.ts    # Fact store
+  memory/sqlite-graph.ts
+  tools/wedge.ts      # kpi.lookup, source.cite, rule.check
+  tools/registry.ts   # Zod in/out; planner sin writes
+  session/sqlite.ts   # sesiones persistentes
 plugins/
-  toolkit.wasm        # calc, hash, json_validate, …
-data/
-  mage.vec.db         # vectores locales (auto-creado)
+  toolkit.wasm
+examples/
+  http-kpi/           # wedge de ejemplo
+data/                 # sqlite local (gitignore)
 ```
+
+## 17. Contribuir
+
+Ver [CONTRIBUTING.md](../CONTRIBUTING.md), [ARCHITECTURE.md](ARCHITECTURE.md), [PRODUCTO.md](PRODUCTO.md) y [SECURITY.md](../SECURITY.md).
+
+No reabrir el contrato evidence/refuse. El trabajo que queda es operar un wedge real y generalizar el fast path — no más palíndromos ni coding tools.

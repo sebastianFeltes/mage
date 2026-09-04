@@ -2,6 +2,8 @@
 
 Backlog de producto para Fase 1 → algo que se pueda vender o embeber sin mentir. El kernel ya cierra el contrato: **no afirma lo que no puede trazar**. Este doc queda como mapa de por qué se hizo así.
 
+**Estado 0.3.0:** las olas 1–10 y el audit (write-tools, evidence positiva, tenants, idempotencia, conflictos) están en código y en `bun test`. Los “Hoy:” de las secciones 2–8 describen el repo *antes* de implementar; no los uses como foto actual. Foto actual: README, [COMO.md](COMO.md), [COMPARATIVA.md](COMPARATIVA.md). Lo que queda: operar un wedge real, fast path como clasificador (§2.4), no reabrir el contrato.
+
 “Decente” acá no significa IDE, cloud ni multiagente. Significa: un cliente puede preguntar un hecho de su dominio y o bien recibe una respuesta **con evidencia**, o bien Mage **calla**.
 
 ---

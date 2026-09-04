@@ -22,6 +22,10 @@
 - Default `MAGE_GRAPH=sqlite` (sin Docker)
 - Prompt deja de ser la policía; el runtime descarta texto sin evidence
 
+### Docs
+
+- README, `docs/COMO.md` y `docs/COMPARATIVA.md` alineados a 0.3.0 (SQLite-first, refuse, ingest; COMPARATIVA ya no describe 0.2.0)
+
 ## [0.2.0] - 2026-09-03
 
 ### Added
