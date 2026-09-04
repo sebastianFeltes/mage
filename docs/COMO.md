@@ -1,6 +1,6 @@
 # Mage — Cómo usarlo
 
-Guía práctica del kernel plan+verify. Camino feliz: Bun, SQLite, sin Docker. El LLM es opcional (stub o fast path).
+Guía práctica del **motor epistemico determinista**. Camino feliz: Bun, SQLite, sin Docker. El LLM es opcional (stub o fast path).
 
 Versión 0.3.1. Frase de producto: Mage verifica afirmaciones de un dominio y se niega cuando no puede.
 
@@ -96,7 +96,7 @@ Grafo: SQLite en `./data` (`MAGE_GRAPH=sqlite`). Falkor: `MAGE_GRAPH=falkor` y `
 ```
 Consulta
    │
-   ├─► Fast path? (math/hash/json) ──► WASM, 0 tokens
+   ├─► Fast path? (calc AST / hash / JSON) ──► WASM, 0 tokens
    │
    └─► Enrich (≤25 ms): facts del tenant + grafo SQLite
    │
@@ -117,7 +117,7 @@ El loop **no** persiste `memoryCandidates` del plan.
 
 | Consulta ejemplo | Tool |
 |------------------|------|
-| `cuánto es (12+8)*3` / `(12+8)*3` | `calc` |
+| `cuánto es (12+8)*3` / `(12+8)*3` | `calc` (AST; `(12+8)*` no matchea) |
 | `valida con calc: 0.1+0.2` | `calc` |
 | `hash de mage` | `hash` |
 | `{ "a": 1 }` | `json_validate` |
@@ -375,7 +375,8 @@ src/
   server.ts           # HTTP /v1
   loop/metacog.ts     # bucle
   loop/result.ts      # finalizeResult (único que fabrica answer)
-  loop/fastpath.ts    # atajo WASM
+  loop/fastpath.ts    # atajo WASM (calc por AST)
+  loop/metrics.ts     # snapshot /health (rotting)
   memory/ingest.ts    # Fact store
   memory/sqlite-graph.ts
   tools/wedge.ts      # kpi.lookup, source.cite, rule.check
@@ -392,5 +393,3 @@ data/                 # sqlite local (gitignore)
 ## 17. Contribuir
 
 Ver [CONTRIBUTING.md](../CONTRIBUTING.md), [ARCHITECTURE.md](ARCHITECTURE.md), [PRODUCTO.md](PRODUCTO.md) y [SECURITY.md](../SECURITY.md).
-
-No reabrir el contrato evidence/refuse. El trabajo que queda es operar un wedge real y generalizar el fast path — no más palíndromos ni coding tools.

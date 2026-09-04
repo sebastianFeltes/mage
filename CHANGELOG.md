@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Docs
+
+- Descripción del motor: **motor epistemico determinista**
+- README público con contrato, invariantes y superficie completa
+- Retirados `docs/COMPARATIVA.md`, `docs/TOKEN.md` y `docs/TOKEN-F2.md` (internos; no van al repo público)
+
 ## [0.3.1] - 2026-09-03
 
 ### Added
@@ -11,7 +19,7 @@
 
 ### Docs
 
-- `docs/TOKEN-F2.md` olas 11–14
+- Guía de uso (`docs/COMO.md`): métricas `/health` y wedge `consultora-norte`
 
 ## [0.3.0] - 2026-09-03
 
@@ -37,7 +45,7 @@
 
 ### Docs
 
-- README, `docs/COMO.md` y `docs/COMPARATIVA.md` alineados a 0.3.0 (SQLite-first, refuse, ingest; COMPARATIVA ya no describe 0.2.0)
+- README y `docs/COMO.md` alineados a 0.3.0 (SQLite-first, refuse, ingest)
 
 ## [0.2.0] - 2026-09-03
 

@@ -1,10 +1,10 @@
 # Arquitectura de Mage
 
-Documento de contexto para el equipo. Versión 0.3.1.
+Documento de contexto. Versión 0.3.1.
 
 ## Visión
 
-Mage es un **kernel plan+verify**: produce un plan JSON (Zod), ejecuta tools con output tipado y solo responde si hay evidence. Sin rastro, `status: refused`. La memoria de producto es `Fact` ingestido (tenant + fuente), no el texto del modelo.
+Mage es un **motor epistemico determinista**: produce un plan JSON (Zod), ejecuta tools con output tipado y solo responde si hay evidence. Sin rastro, `status: refused`. La memoria de producto es `Fact` ingestido (tenant + fuente), no el texto del modelo.
 
 ## Módulos
 
@@ -66,7 +66,7 @@ flowchart TB
 ## Flujo de una consulta
 
 1. **Sesión:** resolver o crear `sessionId` + `tenantId`; historial = resumen compactado + últimos 6 turnos.
-2. **Fast path:** patrones determinísticos → WASM directo (~3 ms, 0 tokens LLM).
+2. **Fast path:** clasificador de intent (calc por AST, hash, JSON) → WASM directo (~3 ms, 0 tokens LLM).
 3. **Enrich:** hechos del tenant + grafo SQLite (Falkor opcional). Sin embeddings FNV si `embedProvider=none`.
 4. **Plan:** LLM genera `Plan` JSON con `toolCalls`. `proposedAnswer` nunca es la respuesta.
 5. **Sandbox:** ejecutar tools; output Zod; si fallan → corrección (hasta 3 intentos).
@@ -82,7 +82,7 @@ flowchart TB
 | WASM (`calc`, `hash`, …) | Tools fijas, ultra-rápidas | ~2–5 ms | Extism, timeout 50 ms |
 | `script.run` | Código arbitrario del LLM | ~10–500 ms | Subproceso Bun, opt-in |
 
-WASM es el camino feliz para verificación numérica. `script.run` existe para algoritmos que el LLM inventa (quicksort, Fibonacci, etc.) pero **no debe habilitarse en producción pública** sin más aislamiento.
+WASM es el camino feliz para verificación numérica. `script.run` existe para programas con `id` + schema (`offline:sort`) pero **no debe habilitarse en producción pública** sin más aislamiento. Default off. `mage serve` no lo prende.
 
 ### ¿Por qué SQLite-first?
 
@@ -105,15 +105,15 @@ El output del LLM es un **objeto Zod** (`Plan`), no texto libre. `streamObject` 
 |--------------|-------|------|
 | Nueva tool WASM | `wasm/toolkit.ts` → `bun run build:wasm` | AssemblyScript + registrar en `tools/builtin.ts` |
 | Tool host (HTTP, archivos) | `tools/registry.ts` | Implementar `HostTool` |
-| Fast path | `loop/fastpath.ts` | Nuevo regex + `runTool` |
-| Offline fallback | `loop/offline.ts` | Patrón + `runScriptPlan` |
+| Fast path | `loop/intent.ts` + `loop/fastpath.ts` | Intent tipado; calc pasa por AST |
+| Offline fallback | `loop/offline.ts` | Programa con `id` + schema |
 | Session store | `session/store.ts` | Implementar `SessionStore` |
 | Provider LLM | `llm/provider.ts` | Añadir tier en `modelTiers` |
 
 ## API pública (`src/index.ts`)
 
 ```typescript
-mage(query, { sessionId, onEvent, planOnly, runtime })
+mage(query, { sessionId, tenantId, onEvent, planOnly, runtime, signal })
 runMage(query, runtime, { sessionId, onEvent, signal })
 runMageStream(query, runtime, { sessionId, signal })
 createSession / getSession / deleteSession
@@ -126,10 +126,3 @@ getRuntime / createRuntime / startServer
 - Free tier Gemini: poca cuota; usar stub, Ollama o fast path.
 - FalkorDB opcional; el default es SQLite.
 - Contradicciones de facts se rechazan; no hay merge semántico ni resolución de conflictos UI.
-
-## Roadmap técnico
-
-| Fase | Entregable |
-|------|------------|
-| 1–2 (actual) | Contrato evidence/refuse, wedge KPI, SQLite, auth, evals stub |
-| 3 | Mage Cloud (grafo gestionado, dashboard) — no empezar hasta operar un wedge real |

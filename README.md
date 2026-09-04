@@ -1,10 +1,47 @@
 # Mage
 
-Mage verifica afirmaciones de un dominio (números, reglas, entidades) y **se niega cuando no puede**. No es un coding agent ni un chat.
+**Motor epistemico determinista.** Verifica afirmaciones de un dominio (números, reglas, entidades) y **se niega cuando no puede**. No es un coding agent ni un chat.
 
-Si responde, hay evidence tipada (`kpi.lookup`, `calc`, …). Si no hay rastro, `status: refused`. El modelo puede soñar un número: el runtime lo tira.
+El LLM propone un plan JSON. El runtime es quien afirma. Si responde, hay evidence tipada (`kpi.lookup`, `calc`, …). Si no hay rastro, `status: refused`. El modelo puede soñar un número: Mage lo tira.
 
 MIT. Bun. Sin Docker para el camino feliz.
+
+## Cómo funciona
+
+```
+consulta
+  ├─ fast path (AST / hash / JSON) → WASM, ~3 ms, 0 tokens
+  ├─ enrich (≤25 ms): Facts del tenant + grafo SQLite
+  ├─ plan Zod → tools con input/output tipado
+  └─ finalizeResult
+        evidence positiva → status: answered
+        si no            → status: refused
+```
+
+Invariantes (romperlas es un bug):
+
+1. `proposedAnswer` del modelo **nunca** es `result.answer`.
+2. `confidence` no habilita responder sin tools.
+3. El planner **no** escribe memoria. Ingest solo por CLI o `POST /v1/memory`.
+4. Toda tool tiene Zod de entrada y salida. `answer` sale del output parseado.
+5. `status: answered | refused | error`. Callar es éxito.
+
+## Características
+
+| Área | Qué hay |
+|------|---------|
+| Contrato | `status`, `answer`, `refusalReason`, `evidence[]`, `plan`, `timings` |
+| Fast path | Calc por AST (`(12+8)*3` sí, `(12+8)*` no), `hash`, JSON literal — 0 tokens |
+| Wedge | `kpi.lookup`, `source.cite`, `rule.check` sobre Facts ingestidos |
+| Primitivas WASM | `calc`, `hash`, `json_validate` (Extism, timeout 50 ms) |
+| Memoria | `Fact` con `tenantId` + `source`. Contradicción → conflicto, no pisa |
+| Superficies | CLI (`mage`), HTTP (`mage serve`), librería (`import { mage }`) |
+| Sesiones | SQLite, compaction, aisladas por tenant |
+| HTTP | `/v1/query`, `/v1/query/stream` (SSE), `/v1/memory`, `/v1/sessions`, `/health` |
+| Auth | Loopback por defecto. Fuera de localhost exige `MAGE_API_KEY`. CORS cerrado, rate limit, `Idempotency-Key` |
+| Providers | Gemini / Anthropic / OpenAI + stub (tests) + fallback Ollama opt-in |
+| Métricas | `% answered` / `% refused` / `planMs` p50/p95 / `rotting` en `GET /health` |
+| Evals | Refuse, injection, poison, grounded, wedge — `bun test`, sin red |
 
 ## Probar en 2 minutos (sin API key)
 
@@ -28,7 +65,7 @@ MAGE_PROVIDER=stub MAGE_STUB_PLAN='{"thought":"lookup","confidence":1,"toolCalls
 # → 1200000   (el 999 del modelo no sale)
 ```
 
-Sin semilla, el mismo plan → `refused` / `not_found`.
+Sin semilla, el mismo plan → `refused` / `not_found`. Otro tenant, otro dominio: [`examples/consultora-norte`](examples/consultora-norte/).
 
 ## Con un LLM de verdad
 
@@ -45,7 +82,7 @@ cp .env.example .env
 
 | Sí | No |
 |----|----|
-| Kernel plan JSON → tools → evidence o refuse | Cursor / Claude Code / Antigravity |
+| Motor epistemico determinista: plan JSON → tools → evidence o refuse | Cursor / Claude Code / un coding agent |
 | KPIs ingestidos con fuente (`source`) | Editar repos, git, browser, MCP |
 | Fast path WASM para aritmética/hash/JSON | “Nunca alucina” (calla; no es magia) |
 | HTTP + librería `mage()` embebible | Cloud dashboard, multiagente |
@@ -61,7 +98,7 @@ cp .env.example .env
 | `mage serve` | HTTP en `127.0.0.1:3920` |
 | `mage seed` | Nodos demo en el grafo (opcional) |
 
-Fast path (sin LLM): `(12+8)*3`, `cuánto es 2+2`, `hash de mage`, un JSON literal.
+Flags: `--json`, `--verbose`, `--stream`, `--session ID`. Fast path (sin LLM): `(12+8)*3`, `cuánto es 2+2`, `hash de mage`, un JSON literal.
 
 ## HTTP
 
@@ -76,11 +113,14 @@ curl -s -X POST http://127.0.0.1:3920/v1/memory \
 curl -s -X POST http://127.0.0.1:3920/v1/query \
   -H 'Content-Type: application/json' \
   -d '{"query":"(12+8)*3"}'
+
+curl -s http://127.0.0.1:3920/health
 ```
 
 - Loopback por defecto. Si `MAGE_HOST` no es local, hace falta `MAGE_API_KEY`.
 - Con key, `/v1/*` exige `Authorization: Bearer …` (`/health` no).
 - `Idempotency-Key` en `POST /v1/query` (TTL 5 min).
+- Stream: `POST /v1/query/stream` (SSE; el evento `done` es el mismo `MageResult`).
 - `script.run` está **off**. No es un sandbox. No lo prendas en `serve`.
 
 ## Librería
@@ -92,6 +132,8 @@ const r = await mage("cuál es el ARR", { tenantId: "acme" });
 if (r.status === "answered") console.log(r.answer, r.evidence);
 else console.log("calló", r.refusalReason);
 ```
+
+También: `runMage`, `runMageStream`, `createRuntime`, `startServer`, sesiones.
 
 ## Memoria
 
@@ -106,15 +148,13 @@ else console.log("calló", r.refusalReason);
 bun test
 ```
 
-Evals de refuse / injection / poison / grounded corren con `MAGE_PROVIDER=stub`, sin Gemini.
+118 tests. Evals de refuse / injection / poison / grounded / wedge corren con `MAGE_PROVIDER=stub`, sin Gemini.
 
 ## Docs
 
 - [Cómo usarlo](docs/COMO.md)
 - [Arquitectura](docs/ARCHITECTURE.md)
-- [Producto (invariantes)](docs/PRODUCTO.md)
-- [Fase 2 — token olas 11–14](docs/TOKEN-F2.md)
-- [Comparativa vs harnesses de código](docs/COMPARATIVA.md)
+- [Contrato de producto](docs/PRODUCTO.md)
 - [Contribuir](CONTRIBUTING.md)
 - [Seguridad](SECURITY.md)
 

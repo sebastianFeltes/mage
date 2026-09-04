@@ -241,7 +241,7 @@ export const runShell = async (
           } else {
             const n = await rt.graph.seed();
             await rt.vectors.upsert([
-              { type: "Entidad", name: "Mage", props: { text: "Motor metacognitivo en Bun" } },
+              { type: "Entidad", name: "Mage", props: { text: "Motor epistemico determinista en Bun" } },
               { type: "Concepto", name: "FastPath", props: { text: "Respuesta WASM sin LLM" } },
             ]);
             output.write(`seed: ${n} nodos + relaciones demo\n`);

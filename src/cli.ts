@@ -9,7 +9,7 @@ import { startServer } from "./server";
 import { formatStatusLines, runShell, type ShellState } from "./cli/shell";
 import { createSession } from "./session/store";
 
-const help = `mage — motor metacognitivo (Bun)
+const help = `mage — motor epistemico determinista (Bun)
 
 Uso:
   mage                    shell interactivo (runtime caliente)
@@ -145,7 +145,7 @@ if (cmd === "serve") {
   }
   const n = await rt.graph.seed();
   await rt.vectors.upsert([
-    { type: "Entidad", name: "Mage", props: { text: "Motor metacognitivo en Bun" } },
+    { type: "Entidad", name: "Mage", props: { text: "Motor epistemico determinista en Bun" } },
     { type: "Concepto", name: "FastPath", props: { text: "Respuesta WASM sin LLM" } },
   ]);
   console.log(`seed: ${n} nodos + relaciones demo`);

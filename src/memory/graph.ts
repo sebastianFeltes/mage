@@ -107,7 +107,7 @@ export class GraphMemory implements GraphStore {
 
   async seed(): Promise<number> {
     const demo: MemoryCandidate[] = [
-      { type: "Entidad", name: "Mage", props: { text: "Motor metacognitivo en Bun" } },
+      { type: "Entidad", name: "Mage", props: { text: "Motor epistemico determinista en Bun" } },
       { type: "Concepto", name: "FastPath", props: { text: "Respuesta WASM sin LLM" } },
       { type: "Hecho", name: "WasmTimeout", props: { text: "Sandbox limitado a 50ms" } },
     ];
