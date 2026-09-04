@@ -31,7 +31,7 @@ import {
   type MageResult,
   type MageTimings,
 } from "./result";
-import { recordResult } from "./metrics";
+import { MetricsStore } from "./metrics";
 
 export type { Evidence, MageResult, MageStatus, MageTimings } from "./result";
 
@@ -52,6 +52,7 @@ export type MageRuntime = {
   hybrid: HybridMemory;
   facts: FactStore;
   bootMs: number;
+  metrics: MetricsStore;
 };
 
 const hostCtx = (rt: MageRuntime, tenantId: string): HostContext => ({
@@ -95,11 +96,12 @@ export const createRuntime = async (
   const hybrid = new HybridMemory(config, graph, vectors);
   const facts = new FactStore(config);
   const script = new ScriptRunner(config);
+  const metrics = new MetricsStore();
 
   await Promise.all([pool.warm(), graph.connect(), vectors.open()]);
   const registry = new ToolRegistry(pool);
 
-  return { config, pool, script, registry, graph, vectors, hybrid, facts, bootMs: performance.now() - t0 };
+  return { config, pool, script, registry, graph, vectors, hybrid, facts, metrics, bootMs: performance.now() - t0 };
 };
 
 const resolveSession = (
@@ -196,7 +198,7 @@ export const runMage = async (
       tools: fast.plan.toolCalls.map((c) => c.tool),
     }));
     emitFinished(emit, result);
-    recordResult(result);
+    rt.metrics.record(result);
     return result;
   }
 
@@ -278,7 +280,7 @@ export const runMage = async (
         tools: result.plan.toolCalls.map((c) => c.tool),
       }));
       emitFinished(emit, result);
-      recordResult(result);
+      rt.metrics.record(result);
       return result;
     }
     if (err instanceof MageApiError) {
@@ -293,6 +295,7 @@ export const runMage = async (
   }
 
   let evidence: Evidence[] = [];
+  let toolError = false;
 
   for (;;) {
     if (plan.toolCalls.length > 0) {
@@ -336,6 +339,7 @@ export const runMage = async (
         plan = await planOnce(attempts >= 2, plan, traceLines);
         continue;
       }
+      if (failed) toolError = true;
       evidence = batch;
       break;
     }
@@ -367,7 +371,7 @@ export const runMage = async (
     tools: plan.toolCalls.map((c) => c.tool),
   }));
   emitFinished(emit, result);
-  recordResult(result);
+  rt.metrics.record(result, { toolError });
   return result;
 };
 

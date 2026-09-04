@@ -1,6 +1,9 @@
 # TOKEN DE IMPLEMENTACIÓN — Mage producto decente
 
-Pegá este archivo entero como primer mensaje a un modelo menos potente (Composer, Sonnet, local, etc.). Es el contrato. No improvises producto. No leas la conversación humana previa: este doc + el repo bastan.
+> **Olas 1–10 cerradas** (Mage 0.3.0). No ejecutes este archivo para trabajo nuevo.
+> Fase 2 (métricas, fast path AST, offline id+schema, wedge real): **[TOKEN-F2.md](TOKEN-F2.md)**.
+
+Pegá este archivo entero como primer mensaje a un modelo menos potente **solo** si estás auditando el histórico. Canon de invariantes: `docs/PRODUCTO.md`.
 
 Canon: `docs/PRODUCTO.md`. Este token lo vuelve ejecutable. Si hay conflicto, gana PRODUCTO.md en invariantes y este token en tipos, archivos y tests.
 

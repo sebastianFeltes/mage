@@ -2,7 +2,7 @@
 
 Guía práctica del kernel plan+verify. Camino feliz: Bun, SQLite, sin Docker. El LLM es opcional (stub o fast path).
 
-Versión 0.3.0. Frase de producto: Mage verifica afirmaciones de un dominio y se niega cuando no puede.
+Versión 0.3.1. Frase de producto: Mage verifica afirmaciones de un dominio y se niega cuando no puede.
 
 ## Requisitos
 
@@ -15,7 +15,7 @@ Versión 0.3.0. Frase de producto: Mage verifica afirmaciones de un dominio y se
 ```bash
 git clone https://github.com/sebastianFeltes/mage.git && cd mage
 bun install && bun run build:wasm
-bun test                          # 91 tests, sin red
+bun test                          # sin red
 ./bin/mage "(12+8)*3"             # → 60   fast path WASM, 0 tokens
 MAGE_PROVIDER=stub ./bin/mage "cuál es el PIB de Francia"
 # stderr: refused: no_evidence
@@ -194,7 +194,7 @@ Loopback por defecto. Si `MAGE_HOST` no es local, hace falta `MAGE_API_KEY`. Con
 
 | Endpoint | Método | Body | Descripción |
 |----------|--------|------|-------------|
-| `/health` | GET | — | Estado, tools, boot, `metrics` (`answered` / `refused` / `withEvidence`) |
+| `/health` | GET | — | Estado, tools, boot, `metrics` (`refusedRate`, `toolErrorRate`, `planMsP50`/`P95`, `rotting`) |
 | `/v1/query` | POST | `{ query, sessionId?, tenantId? }` | `MageResult` |
 | `/v1/query/stream` | POST | igual | SSE (`done` = mismo `MageResult`) |
 | `/v1/memory` | POST | `{ tenantId, source, facts[] }` | `{ upserted, conflicts }` |
@@ -215,6 +215,10 @@ curl -s -X POST http://127.0.0.1:3920/v1/query \
 
 curl -s http://127.0.0.1:3920/health
 ```
+
+El snapshot de `metrics` incluye `refusedRate`, `toolErrorRate`, `planMsP50` / `planMsP95` y `rotting`. `rotting` es true si el motor responde más de lo que puede trazar (`answeredRate > positiveEvidenceRate`). En operación sana es **false**.
+
+Otro wedge, otro tenant (no pisa `http-kpi`): `examples/consultora-norte/` — 10 hechos de planta (`oee`, `scrap`, `otif`, …), `tenantId=norte`. Ingest + queries stub en el README de ese directorio.
 
 Con key: `-H "Authorization: Bearer $MAGE_API_KEY"`. El servidor reutiliza un runtime caliente.
 
@@ -380,7 +384,8 @@ src/
 plugins/
   toolkit.wasm
 examples/
-  http-kpi/           # wedge de ejemplo
+  http-kpi/           # wedge demo del README
+  consultora-norte/   # wedge industrial (tenant norte)
 data/                 # sqlite local (gitignore)
 ```
 

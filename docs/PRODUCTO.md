@@ -233,9 +233,18 @@ Fase 3 (Cloud) solo tiene sentido cuando Fase 2 tiene invariantes + un wedge + e
 | 9 | SQLite-first, Falkor opcional | `bun install && mage` funciona |
 | 10 | Compaction + tenants | Segundo cliente no ve al primero |
 
-Olas 1–10 implementadas en este repo. El trabajo que queda es operar el wedge, no reabrir el contrato.
+Olas 1–10 implementadas en este repo. Fase 2: [TOKEN-F2.md](TOKEN-F2.md).
 
-Los puntos 1–3 son el motor. 4–6 lo hacen serio. 7 es el producto. 8–10 son higiene para que alguien más lo toque.
+| Orden | Qué | Criterio de “listo” |
+|------|-----|---------------------|
+| 11 | Métricas en `serve` (`/health`) | `% refused`, `% tool_error`, `planMs` p50/p95, `rotting` |
+| 12 | Fast path clasificador (AST / intent Zod) | `2+2` y `(12+8)*3` calc; `(12+8)*` no match |
+| 13 | Programas offline: tabla `id` + schema | `sort [3,1,4]` sí; `ordena …` / prosa quicksort no |
+| 14 | Wedge real `consultora-norte` + eval | 10 hechos ≠ http-kpi; `answeredRate ≤ positiveEvidenceRate` |
+
+**Después, no ahora:** embeddings de verdad o ninguno; hash de plugins WASM. No Cloud, no git/MCP/browser, no multiagente, no más palíndromos.
+
+Los puntos 1–3 son el motor. 4–6 lo hacen serio. 7 es el producto. 8–10 son higiene. 11–14 operan y miden el wedge sin reabrir el contrato.
 
 ---
 
@@ -249,4 +258,4 @@ Se puede decir que salió de “idea” cuando:
 - El README no necesita palíndromos para explicar el valor.
 - La API tiene `status` / `evidence` y un cliente puede ignorar `thought`.
 
-Olas 1–10 más los agujeros de audit (write-tools, evidence positiva, tenants de grafo, idempotencia, conflictos) están en el código y en `bun test`. El trabajo que queda es operar un wedge real con un LLM, no reabrir el contrato.
+Olas 1–10 más los agujeros de audit (write-tools, evidence positiva, tenants de grafo, idempotencia, conflictos) están en el código y en `bun test`. Fase 2 (olas 11–14) está en [TOKEN-F2.md](TOKEN-F2.md): métricas, fast path AST, offline id+schema, wedge `consultora-norte`. No reabrir el contrato.

@@ -1,6 +1,5 @@
 import { getRuntime } from "./runtime";
 import { runMage } from "./loop/metacog";
-import { snapshotMetrics } from "./loop/metrics";
 import type { MageEvent } from "./loop/events";
 import { MageApiError } from "./llm/provider";
 import { FactInputSchema } from "./llm/schemas";
@@ -107,7 +106,7 @@ const route = async (
         enabled: rt.config.sessionEnabled,
         count: store.count(),
       },
-      metrics: snapshotMetrics(),
+      metrics: rt.metrics.snapshot(),
     });
   }
 

@@ -1,6 +1,6 @@
 # Arquitectura de Mage
 
-Documento de contexto para el equipo. Versión 0.3.0.
+Documento de contexto para el equipo. Versión 0.3.1.
 
 ## Visión
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.1] - 2026-09-03
+
+### Added
+
+- Métricas de producto en `GET /health`: `refusedRate`, `toolErrorRate`, `planMs` p50/p95, `positiveEvidenceRate`, `rotting` (store por runtime)
+- Fast path calc por AST; `(12+8)*` y `hola 2+2` no matchean
+- Offline `sort [n,…]` / `offline:sort` / JSON `{program,input}` — prosa “ordena”/quicksort no dispara
+- Wedge `examples/consultora-norte` (tenant `norte`) + eval answered vs evidence positiva
+
+### Docs
+
+- `docs/TOKEN-F2.md` olas 11–14
+
 ## [0.3.0] - 2026-09-03
 
 ### Added

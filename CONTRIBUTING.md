@@ -28,10 +28,10 @@ cp .env.example .env     # solo si vas a pegarle a un LLM
 
 ## Áreas donde ayudar
 
-- Fast path como clasificador (no más regex de marketing): `src/loop/fastpath.ts` — ver `docs/PRODUCTO.md` §2.4
+- Fast path como clasificador (no más regex de marketing): `src/loop/fastpath.ts` — ver `docs/TOKEN-F2.md` ola 12
 - Evals y golden traces (`tests/evals/`) con `MAGE_PROVIDER=stub`
-- Documentación y el wedge de ejemplo (`examples/http-kpi`)
-- No: palíndromos/primos nuevos, filesystem/git/MCP, Falkor “porque sí”
+- Wedge `examples/consultora-norte` (ola 14) y métricas `/health` (ola 11)
+- Documentación. No: palíndromos/primos nuevos, filesystem/git/MCP, Falkor “porque sí”
 
 Ver [docs/COMO.md](docs/COMO.md), [docs/PRODUCTO.md](docs/PRODUCTO.md) y [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

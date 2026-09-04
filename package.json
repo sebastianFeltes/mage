@@ -1,6 +1,6 @@
 {
   "name": "mage",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Kernel plan+verify en Bun: evidence tipada o refuse. No es un coding agent.",
   "license": "MIT",
   "private": true,

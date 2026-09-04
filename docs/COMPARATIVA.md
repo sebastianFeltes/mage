@@ -132,7 +132,7 @@ La semejanza termina en el **objeto de la tool**. En Mage la tool *lee un hecho 
 8. **Sin IDE, sin diffs, sin Tab.** Mage no acelera *escribir código*.
 9. **Sin ecosistema.** No MCP, no marketplace, no cloud agents. Extender es implementar `HostTool` o recompilar WASM.
 10. **Cuota y latencia del LLM.** El plan sigue siendo una llamada cloud (salvo stub / Ollama / fast path). Verificar no elimina `planMs`.
-11. **Madurez.** Kernel + 91 tests stub. No hay SLO, ni evals públicas contra harnesses, ni un wedge en producción.
+11. **Madurez.** Kernel + evals stub (refuse/injection/poison/wedge). No hay SLO ni evals públicas contra harnesses.
 12. **WASM de confianza.** Timeout 50 ms no es aislamiento de red completo; los plugins se tratan como código trusted.
 13. **Solo Bun.** Fricción en shops Node/Python/Go que quieran embeber el motor sin adoptar el runtime.
 14. **Compaction útil, no mágica.** Summary con factIds / evidence ids + últimos turnos. No es un resumen LLM ni un índice de repo.

@@ -13,7 +13,7 @@ Hace falta [Bun](https://bun.sh) ≥ 1.1.
 ```bash
 git clone https://github.com/sebastianFeltes/mage.git && cd mage
 bun install && bun run build:wasm
-bun test                          # 91 tests, sin red
+bun test                          # 108 tests, sin red
 ./bin/mage "(12+8)*3"             # → 60   fast path WASM, 0 tokens
 MAGE_PROVIDER=stub ./bin/mage "cuál es el PIB de Francia"
 # stderr: refused: no_evidence
@@ -113,6 +113,7 @@ Evals de refuse / injection / poison / grounded corren con `MAGE_PROVIDER=stub`,
 - [Cómo usarlo](docs/COMO.md)
 - [Arquitectura](docs/ARCHITECTURE.md)
 - [Producto (invariantes)](docs/PRODUCTO.md)
+- [Fase 2 — token olas 11–14](docs/TOKEN-F2.md)
 - [Comparativa vs harnesses de código](docs/COMPARATIVA.md)
 - [Contribuir](CONTRIBUTING.md)
 - [Seguridad](SECURITY.md)

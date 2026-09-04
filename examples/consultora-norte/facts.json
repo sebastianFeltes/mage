@@ -1,0 +1,16 @@
+{
+  "tenantId": "norte",
+  "source": "cliente://norte/fy26",
+  "facts": [
+    { "name": "oee", "text": "OEE planta 74%", "value": "0.74" },
+    { "name": "scrap", "text": "Scrap 3.1%", "value": "0.031" },
+    { "name": "otif", "text": "OTIF 91%", "value": "0.91" },
+    { "name": "wipDays", "text": "WIP 12 días", "value": "12" },
+    { "name": "energyKwh", "text": "Energía 184 MWh/mes", "value": "184000" },
+    { "name": "ltir", "text": "LTIR 0.42", "value": "0.42" },
+    { "name": "backlog", "text": "Backlog 2.1M USD", "value": "2100000" },
+    { "name": "yield", "text": "Yield 96.5%", "value": "0.965" },
+    { "name": "downtimeH", "text": "Downtime 37 h/mes", "value": "37" },
+    { "name": "onTimeSup", "text": "On-time supplier 88%", "value": "0.88" }
+  ]
+}
