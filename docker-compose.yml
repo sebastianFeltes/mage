@@ -1,0 +1,16 @@
+# Opcional. Mage usa SQLite por defecto (MAGE_GRAPH=sqlite).
+# Solo si querés Falkor: MAGE_GRAPH=falkor && docker compose up -d
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - falkor-data:/data
+volumes:
+  falkor-data:

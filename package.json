@@ -1,0 +1,49 @@
+{
+  "name": "mage",
+  "version": "0.3.0",
+  "description": "Kernel plan+verify en Bun: evidence tipada o refuse. No es un coding agent.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "module": "src/index.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sebastianFeltes/mage.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sebastianFeltes/mage/issues"
+  },
+  "keywords": ["ai", "agents", "verify", "wasm", "bun", "llm"],
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "bin": {
+    "mage": "bin/mage"
+  },
+  "scripts": {
+    "mage": "bun run src/cli.ts",
+    "start": "bun run src/cli.ts",
+    "link:global": "bun link",
+    "build:wasm": "bun run wasm/build.ts",
+    "test": "bun test",
+    "compose": "docker compose up -d",
+    "serve": "bun run src/cli.ts serve",
+    "seed": "bun src/cli.ts seed",
+    "status": "bun src/cli.ts status"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.49",
+    "@ai-sdk/google": "^4.0.63",
+    "@ai-sdk/openai": "^4.0.57",
+    "@extism/extism": "^2.0.0-rc13",
+    "ai": "^7.0.91",
+    "falkordb": "^6.8.0",
+    "sqlite-vec": "^0.1.9",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@extism/as-pdk": "^1.0.0",
+    "@types/bun": "^1.4.0",
+    "assemblyscript": "^0.28.20"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "tenantId": "default",
+  "source": "cliente://acme/q4",
+  "facts": [
+    { "name": "arr", "text": "ARR 1.2M USD FY25", "value": "1200000" },
+    { "name": "arrPU", "text": "ARR por unidad 4800 USD", "value": "4800" },
+    { "name": "nrr", "text": "Net revenue retention 112%", "value": "1.12" },
+    { "name": "churn", "text": "Churn logo 4% trimestral", "value": "0.04" },
+    { "name": "grossMargin", "text": "Margen bruto 72%", "value": "0.72" },
+    { "name": "headcount", "text": "Headcount 48 FTE", "value": "48" },
+    { "name": "pipeline", "text": "Pipeline ponderado 3.1M", "value": "3100000" },
+    { "name": "cac", "text": "CAC blended 18000 USD", "value": "18000" },
+    { "name": "ltv", "text": "LTV 90000 USD", "value": "90000" },
+    { "name": "runway", "text": "Runway 14 meses", "value": "14" }
+  ]
+}

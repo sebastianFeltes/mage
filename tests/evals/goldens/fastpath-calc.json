@@ -1,0 +1,6 @@
+{
+  "query": "cuánto es (12+8)*3",
+  "status": "answered",
+  "tools": ["calc"],
+  "answer": "60"
+}

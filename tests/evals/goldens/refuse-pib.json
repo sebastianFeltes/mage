@@ -1,0 +1,5 @@
+{
+  "query": "cuál es el PIB de Francia",
+  "status": "refused",
+  "tools": []
+}
