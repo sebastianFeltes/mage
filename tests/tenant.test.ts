@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { loadConfig } from "../src/config";
 import { createRuntime, runMage } from "../src/loop/metacog";
 import { getSessionStore, resetSessionStore } from "../src/session/store";
+import { SessionTenantMismatchError } from "../src/session/errors";
 
 const tmpFacts = (): string => join(mkdtempSync(join(tmpdir(), "mage-tenant-")), "facts.sqlite");
 
@@ -72,6 +73,23 @@ describe("tenant isolation", () => {
     expect(store.get(a.id, "globex")).toBeNull();
     expect(store.list("globex")).not.toContain(a.id);
     expect(store.list("acme")).toContain(a.id);
+    resetSessionStore();
+  });
+
+  test("sessionId de otro tenant lanza SessionTenantMismatchError", async () => {
+    resetSessionStore();
+    const rt = await createRuntime({
+      ...loadConfig(),
+      provider: "stub",
+      fallbackOllama: false,
+      sessionStore: "memory",
+      factsPath: tmpFacts(),
+    });
+    const store = getSessionStore(rt.config);
+    const acme = store.create({ tenantId: "acme" });
+    await expect(runMage("cuánto es 1+1", rt, { sessionId: acme.id, tenantId: "globex" })).rejects.toBeInstanceOf(
+      SessionTenantMismatchError,
+    );
     resetSessionStore();
   });
 

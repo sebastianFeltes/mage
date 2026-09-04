@@ -166,10 +166,11 @@ export function finalizeResult(args: {
 Reglas de `finalizeResult`:
 
 - 0 evidence → `{ status: "refused", answer: "", refusalReason: "no_evidence" }`.
-- ≥1 evidence → `status: "answered"`. `answer` se hidrata así:
-  1. Preferí campos canónicos del último output: `value`, `stdout`, `fnv1a`, `result`, `ok`+payload.
-  2. Si hay `draft`, usalo **solo** si todos los números/fechas del draft aparecen en `JSON.stringify(evidence)`. Si el draft mete un número extra → ignorá el draft y usá el campo canónico. Nunca refuse por un draft sucio si hay evidence válida.
+- ≥1 evidence → `status: "answered"`. `answer` se hidrata desde campos canónicos del último output tipado: `value`, `stdout`, `fnv1a`, `result`, `ok`+payload, etc. (`answerFromOutput` en `src/loop/result.ts`).
+- El parámetro `draft` (`plan.proposedAnswer`) **no se usa** en `finalizeResult`; nunca es fuente de `answer`. Fast path demo aplica formato legible en `fastPathResult` tras evidence positiva.
 - No leas `plan.confidence` para decidir status.
+- Si `plan.refuse === true` → `refused` con `refusalReason` del plan o `model_refused` (sin ejecutar tools).
+- Si todas las tools fallan al agotar intentos → `status: "error"`, `refusalReason: "tool_failed"`.
 
 **Corrección:**
 

@@ -190,7 +190,7 @@ También: `exit`, `quit`. Equivalente: `bun src/cli.ts --repl`.
 ./bin/mage serve          # http://127.0.0.1:3920
 ```
 
-Loopback por defecto. Si `MAGE_HOST` no es local, hace falta `MAGE_API_KEY`. Con key, `/v1/*` exige `Authorization: Bearer` (`/health` no). CORS cerrado (nunca `*`). Rate limit 60 req/min/IP en `/v1/query*`. `Idempotency-Key` en `POST /v1/query` (TTL 5 min). `script.run` **no** se prende con `serve`.
+Loopback por defecto. Si `MAGE_HOST` no es local, hace falta `MAGE_API_KEY`. Con key, `/v1/*` exige `Authorization: Bearer` (`/health` no). CORS cerrado (nunca `*`). Rate limit 60 req/min/IP en `/v1/query*`, `/v1/memory` y `/v1/sessions*`. Payload: query ≤ 16 KiB, body ≤ 1 MiB, ingest ≤ 500 facts. `Idempotency-Key` en `POST /v1/query` (TTL 5 min). `script.run` **no** se prende con `serve`.
 
 | Endpoint | Método | Body | Descripción |
 |----------|--------|------|-------------|
@@ -199,8 +199,8 @@ Loopback por defecto. Si `MAGE_HOST` no es local, hace falta `MAGE_API_KEY`. Con
 | `/v1/query/stream` | POST | igual | SSE (`done` = mismo `MageResult`) |
 | `/v1/memory` | POST | `{ tenantId, source, facts[] }` | `{ upserted, conflicts }` |
 | `/v1/sessions` | POST | `{ tenantId? }` | `{ sessionId, tenantId, createdAt }` |
-| `/v1/sessions/:id` | GET | `?tenantId=` | sesión + `turns[]` + `summary` |
-| `/v1/sessions/:id` | DELETE | — | `{ ok: true }` |
+| `/v1/sessions/:id` | GET | `?tenantId=` **requerido** | sesión + `turns[]` + `summary` |
+| `/v1/sessions/:id` | DELETE | `?tenantId=` **requerido** | `{ ok: true }` |
 
 ```bash
 ./bin/mage serve

@@ -61,7 +61,7 @@ Cero hits.
 
 ## 3. Estado actual del repo (0.3.0 — no reescribas de cero)
 
-Runtime: Bun ≥ 1.1. Tests: `bun test` (~91, stub, sin red). WASM: `bun run build:wasm`.
+Runtime: Bun ≥ 1.1. Tests: `bun test` (~118, stub, sin red). WASM: `bun run build:wasm`.
 
 | Path | Qué hay hoy | Qué falta |
 |------|-------------|-----------|
@@ -69,7 +69,7 @@ Runtime: Bun ≥ 1.1. Tests: `bun test` (~91, stub, sin red). WASM: `bun run bui
 | `src/loop/fastpath.ts` | Tabla `INTENTS` + 6 matchers regex (frases ES del README) | Clasificador: AST de calc + intent Zod. Las frases no son el contrato |
 | `src/loop/offline.ts` | Tabla `PROGRAMS` de 1 item; match por `\bquicksort\b` + `[n,n]` | Match por `id`+schema. Cero regex de “ordena”/quicksort en lenguaje natural |
 | `src/loop/metrics.ts` | contadores: queries/answered/refused/errors/withEvidence | `% refused`, `% tool_error`, `planMs` p50/p95, evidence **positiva**, flag `rotting` |
-| `src/server.ts` | `GET /health` → `metrics: snapshotMetrics()` | Exponer el snapshot nuevo |
+| `src/server.ts` | `GET /health` → `metrics: rt.metrics.snapshot()` | Exponer el snapshot nuevo |
 | `examples/http-kpi/` | 10 KPIs demo `tenantId=default` | **Otro** tenant, 10 hechos distintos, eval de pudrición |
 | `tests/evals/` | refuse / grounded / injection / poison / goldens | Eval wedge real + ratios |
 

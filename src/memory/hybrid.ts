@@ -19,7 +19,7 @@ export class HybridMemory {
     const vecP =
       this.config.embedProvider === "none"
         ? Promise.resolve([] as VectorHit[])
-        : withBudget(this.vectors.search(query, this.config.vectorTopK), budget, []);
+        : withBudget(this.vectors.search(query, this.config.vectorTopK, tenantId), budget, []);
     const [graphHits, vecHits] = await Promise.all([graphP, vecP]);
 
     const out: HybridHit[] = [];

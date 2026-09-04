@@ -140,10 +140,9 @@ export const fastPathResult = (hit: FastPathHit, bootMs: number, enrichMs = 0): 
         },
       ]
     : [];
-  return finalizeResult({
+  const base = finalizeResult({
     plan: hit.plan,
     evidence,
-    draft: hit.answer,
     timings: {
       bootMs,
       enrichMs,
@@ -154,4 +153,8 @@ export const fastPathResult = (hit: FastPathHit, bootMs: number, enrichMs = 0): 
       usedReasonModel: false,
     },
   });
+  if (base.status === "answered") {
+    return { ...base, answer: hit.answer };
+  }
+  return base;
 };

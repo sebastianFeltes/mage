@@ -43,7 +43,7 @@ export type SessionStore = {
   get(id: string, tenantId?: string): Session | null;
   append(id: string, role: TurnRole, content: string, meta?: Turn["meta"]): Turn | null;
   list(tenantId?: string): string[];
-  delete(id: string): boolean;
+  delete(id: string, tenantId: string): boolean;
   trim(id: string, maxTurns: number): void;
   compact(id: string, maxTurns: number, keepRecent?: number): void;
   count(tenantId?: string): number;

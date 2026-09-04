@@ -13,7 +13,7 @@ Hace falta [Bun](https://bun.sh) ≥ 1.1.
 ```bash
 git clone https://github.com/sebastianFeltes/mage.git && cd mage
 bun install && bun run build:wasm
-bun test                          # 108 tests, sin red
+bun test                          # 118 tests, sin red
 ./bin/mage "(12+8)*3"             # → 60   fast path WASM, 0 tokens
 MAGE_PROVIDER=stub ./bin/mage "cuál es el PIB de Francia"
 # stderr: refused: no_evidence

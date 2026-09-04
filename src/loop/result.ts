@@ -77,11 +77,16 @@ export const answerFromOutput = (output: unknown): string => {
 
 /**
  * Una tool afirma algo verificable. `memory.search` (hits) y `found:false` no cuentan.
- * Default deny: un objeto desconocido no habilita answer.
+ * Default deny: un objeto desconocido no habilita answer. Strings crudos no cuentan.
  */
-export const isPositiveEvidence = (e: Evidence): boolean => {
-  const output = e.output;
-  if (typeof output === "string") return output.length > 0;
+export const isPositiveOutput = (output: unknown): boolean => {
+  if (typeof output === "string") {
+    try {
+      return isPositiveOutput(JSON.parse(output));
+    } catch {
+      return false;
+    }
+  }
   if (typeof output === "number" || typeof output === "boolean") return true;
 
   const rec = asRecord(output);
@@ -101,6 +106,8 @@ export const isPositiveEvidence = (e: Evidence): boolean => {
   if (rec.ok === true) return true;
   return false;
 };
+
+export const isPositiveEvidence = (e: Evidence): boolean => isPositiveOutput(e.output);
 
 export function finalizeResult(args: {
   plan: Plan;

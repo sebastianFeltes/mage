@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import createPlugin from "@extism/extism";
 import { resolve } from "node:path";
+import { loadConfig } from "../src/config";
+import { createRuntime, runMage } from "../src/loop/metacog";
 import { tryFastPath } from "../src/loop/fastpath";
+import { SessionTenantMismatchError } from "../src/session/errors";
+import { resetSessionStore } from "../src/session/store";
 import { WasmPool } from "../src/sandbox/pool";
 import { BUILTIN_WASM_TOOLS } from "../src/tools/builtin";
 
@@ -53,5 +57,16 @@ describe("ola 12 fast path AST", () => {
     expect(json?.answer).toBe("JSON válido");
     expect(json?.plan.toolCalls[0]?.tool).toBe("json_validate");
     expect(await tryFastPath('{"program":"sort","input":[3,1,4,1,5]}', pool)).toBeNull();
+  });
+
+  test("runMage preserva respuesta demo formateada", async () => {
+    resetSessionStore();
+    const rt = await createRuntime({ ...loadConfig(), provider: "stub", sessionStore: "memory" });
+    const pal = await runMage("verifica si anita lava la tina es palindromo", rt);
+    expect(pal.status).toBe("answered");
+    expect(pal.answer).toMatch(/Sí/i);
+    const json = await runMage('{ "a": 1 }', rt);
+    expect(json.answer).toBe("JSON válido");
+    resetSessionStore();
   });
 });

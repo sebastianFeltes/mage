@@ -61,7 +61,9 @@ export class InMemorySessionStore implements SessionStore {
       .map((s) => s.id);
   }
 
-  delete(id: string): boolean {
+  delete(id: string, tenantId: string): boolean {
+    const s = this.get(id, tenantId);
+    if (!s) return false;
     return this.sessions.delete(id);
   }
 
@@ -124,5 +126,5 @@ export const createSession = (config: MageConfig, tenantId = DEFAULT_TENANT): Se
   getSessionStore(config).create({ tenantId });
 export const getSession = (config: MageConfig, id: string, tenantId?: string): Session | null =>
   getSessionStore(config).get(id, tenantId);
-export const deleteSession = (config: MageConfig, id: string): boolean =>
-  getSessionStore(config).delete(id);
+export const deleteSession = (config: MageConfig, id: string, tenantId: string): boolean =>
+  getSessionStore(config).delete(id, tenantId);

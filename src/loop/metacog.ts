@@ -19,6 +19,8 @@ import { WasmPool } from "../sandbox/pool";
 import { ScriptRunner } from "../sandbox/script";
 import { SandboxError, SandboxTimeout } from "../sandbox/runner";
 import { getSessionStore } from "../session/store";
+import { SessionTenantMismatchError } from "../session/errors";
+import { normalizeTenant } from "../session/compact";
 import { SESSION_HISTORY_KEEP, type SessionSummary, type Turn } from "../session/types";
 import { ToolRegistry, type HostContext } from "../tools/registry";
 import { BUILTIN_WASM_TOOLS } from "../tools/builtin";
@@ -116,6 +118,10 @@ const resolveSession = (
   if (sessionId) {
     const existing = store.get(sessionId, tenantId);
     if (existing) return { id: existing.id, history: existing.turns, summary: existing.summary };
+    const foreign = store.get(sessionId);
+    if (foreign && foreign.tenantId !== normalizeTenant(tenantId)) {
+      throw new SessionTenantMismatchError(sessionId, tenantId, foreign.tenantId);
+    }
   }
   const created = store.create({ tenantId });
   return { id: created.id, history: [], summary: created.summary };
@@ -294,6 +300,33 @@ export const runMage = async (
     throw err;
   }
 
+  if (plan.refuse === true) {
+    const timings: MageTimings = {
+      bootMs: rt.bootMs,
+      enrichMs,
+      planMs,
+      sandboxMs: 0,
+      totalMs: performance.now() - total0,
+      attempts,
+      usedReasonModel,
+    };
+    const result: MageResult = {
+      plan,
+      evidence: [],
+      status: "refused",
+      answer: "",
+      refusalReason: plan.refuseReason?.trim() || "model_refused",
+      timings,
+      sessionId: sessionId || undefined,
+      tenantId,
+      graphDisabled: rt.graph.disabledReason ?? undefined,
+    };
+    recordTurn(rt, sessionId, "assistant", result.answer, assistantMeta(rt, tenantId, result, {}));
+    emitFinished(emit, result);
+    rt.metrics.record(result);
+    return result;
+  }
+
   let evidence: Evidence[] = [];
   let toolError = false;
 
@@ -367,12 +400,17 @@ export const runMage = async (
     graphDisabled: rt.graph.disabledReason ?? undefined,
   });
 
-  recordTurn(rt, sessionId, "assistant", result.answer, assistantMeta(rt, tenantId, result, {
+  const final: MageResult =
+    toolError && result.status === "refused"
+      ? { ...result, status: "error", refusalReason: "tool_failed" }
+      : result;
+
+  recordTurn(rt, sessionId, "assistant", final.answer, assistantMeta(rt, tenantId, final, {
     tools: plan.toolCalls.map((c) => c.tool),
   }));
-  emitFinished(emit, result);
-  rt.metrics.record(result, { toolError });
-  return result;
+  emitFinished(emit, final);
+  rt.metrics.record(final, { toolError });
+  return final;
 };
 
 export async function* runMageStream(

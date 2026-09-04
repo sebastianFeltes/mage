@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { loadConfig } from "../src/config";
 import { mage } from "../src/index";
 import { createRuntime, runMage } from "../src/loop/metacog";
-import { finalizeResult, type Evidence, type MageTimings } from "../src/loop/result";
+import { finalizeResult, isPositiveOutput, type Evidence, type MageTimings } from "../src/loop/result";
 import type { Plan } from "../src/llm/schemas";
 import { resetSessionStore } from "../src/session/store";
 
@@ -108,5 +108,60 @@ describe("finalizeResult", () => {
     });
     expect(r.status).toBe("answered");
     expect(r.answer).toBe("0.3");
+  });
+
+  test("string crudo no es evidence positiva", () => {
+    expect(isPositiveOutput("cualquier texto")).toBe(false);
+    expect(isPositiveOutput('{"ok":true,"value":"42"}')).toBe(true);
+  });
+
+  test("plan refuse del stub → model_refused", async () => {
+    const prev = process.env.MAGE_STUB_PLAN;
+    process.env.MAGE_STUB_PLAN = JSON.stringify({
+      thought: "no puedo",
+      confidence: 0,
+      toolCalls: [],
+      proposedAnswer: null,
+      refuse: true,
+      refuseReason: "fuera de dominio",
+    });
+    try {
+      resetSessionStore();
+      const rt = await stubRuntime();
+      const result = await runMage("pregunta imposible", rt);
+      expect(result.status).toBe("refused");
+      expect(result.answer).toBe("");
+      expect(result.refusalReason).toBe("fuera de dominio");
+      expect(result.evidence).toEqual([]);
+    } finally {
+      if (prev === undefined) delete process.env.MAGE_STUB_PLAN;
+      else process.env.MAGE_STUB_PLAN = prev;
+    }
+  });
+
+  test("tools fallidas agotadas → status error", async () => {
+    const prev = process.env.MAGE_STUB_PLAN;
+    process.env.MAGE_STUB_PLAN = JSON.stringify({
+      thought: "tool mala",
+      confidence: 1,
+      toolCalls: [{ tool: "tool_inexistente", input: {}, reason: "x" }],
+      proposedAnswer: null,
+    });
+    try {
+      resetSessionStore();
+      const rt = await createRuntime({
+        ...loadConfig(),
+        provider: "stub",
+        fallbackOllama: false,
+        maxAttempts: 1,
+        sessionStore: "memory",
+      });
+      const result = await runMage("lookup x", rt);
+      expect(result.status).toBe("error");
+      expect(result.refusalReason).toBe("tool_failed");
+    } finally {
+      if (prev === undefined) delete process.env.MAGE_STUB_PLAN;
+      else process.env.MAGE_STUB_PLAN = prev;
+    }
   });
 });

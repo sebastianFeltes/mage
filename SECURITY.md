@@ -29,7 +29,8 @@ Responderemos en un plazo de 7 días.
 - Si `MAGE_API_KEY` está seteada, todo `/v1/*` exige `Authorization: Bearer <key>`. `/health` no.
 - Si `MAGE_HOST` no es loopback y no hay API key, el proceso **no arranca**.
 - CORS: lista vacía o allowlist. Nunca `Access-Control-Allow-Origin: *`.
-- Rate limit in-memory: 60 req/min/IP en `/v1/query` y `/v1/query/stream`.
+- Rate limit in-memory: 60 req/min/IP en `/v1/query`, `/v1/query/stream`, `/v1/memory` y `/v1/sessions*`.
+- Límites de payload: query ≤ 16 KiB, body JSON ≤ 1 MiB, ingest ≤ 500 facts por request.
 
 No es un open proxy. Bind público sin key es un error de configuración.
 

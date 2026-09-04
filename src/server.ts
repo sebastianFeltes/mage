@@ -3,6 +3,7 @@ import { runMage } from "./loop/metacog";
 import type { MageEvent } from "./loop/events";
 import { MageApiError } from "./llm/provider";
 import { FactInputSchema } from "./llm/schemas";
+import { SessionTenantMismatchError } from "./session/errors";
 import { createSession, deleteSession, getSession, getSessionStore } from "./session/store";
 import { loadConfig } from "./config";
 import {
@@ -13,6 +14,13 @@ import {
   requestSignal,
   SlidingWindowLimiter,
 } from "./http/guard";
+import {
+  MAX_FACTS_PER_REQUEST,
+  readJsonBody,
+  shouldRateLimit,
+  validateQuery,
+  validateTenantId,
+} from "./http/limits";
 import { getIdempotent, idempotencyKey, putIdempotent } from "./http/idempotency";
 
 export type ServerOptions = {
@@ -24,19 +32,25 @@ export type ServerOptions = {
   rateLimitPerMin?: number;
 };
 
-const parseJson = async (req: Request): Promise<Record<string, unknown> | null> => {
-  try {
-    return (await req.json()) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-};
-
 const unauthorized = (): Response =>
   Response.json(
     { error: "unauthorized" },
     { status: 401, headers: { "WWW-Authenticate": "Bearer" } },
   );
+
+const jsonError = (error: string, status: number): Response => Response.json({ error }, { status });
+
+const parseBody = async (
+  req: Request,
+): Promise<{ body: Record<string, unknown> } | { error: Response }> => {
+  const r = await readJsonBody(req);
+  if (!r.ok) {
+    return {
+      error: jsonError(r.reason === "too_large" ? "payload_too_large" : "JSON inválido", r.reason === "too_large" ? 413 : 400),
+    };
+  }
+  return { body: r.body };
+};
 
 export const startServer = async (opts: ServerOptions = {}) => {
   const port = opts.port ?? Number(process.env.MAGE_PORT ?? 3920);
@@ -65,7 +79,7 @@ export const startServer = async (opts: ServerOptions = {}) => {
         }
       }
 
-      if (url.pathname === "/v1/query" || url.pathname === "/v1/query/stream") {
+      if (shouldRateLimit(url.pathname)) {
         const ip = bunServer.requestIP(req)?.address ?? "unknown";
         const limited = limiter.allow(ip);
         if (!limited.ok) {
@@ -111,9 +125,12 @@ const route = async (
   }
 
   if (req.method === "POST" && url.pathname === "/v1/sessions") {
-    const body = await parseJson(req);
-    const tenantId = body?.tenantId ? String(body.tenantId) : "default";
-    const session = createSession(loadConfig(), tenantId);
+    const parsed = await parseBody(req);
+    if ("error" in parsed) return parsed.error;
+    const tenantRaw = parsed.body.tenantId ? String(parsed.body.tenantId) : "default";
+    const tenantErr = validateTenantId(tenantRaw);
+    if (tenantErr) return jsonError(tenantErr, 400);
+    const session = createSession(loadConfig(), tenantRaw.trim());
     return Response.json({
       sessionId: session.id,
       tenantId: session.tenantId,
@@ -123,26 +140,37 @@ const route = async (
 
   if (req.method === "GET" && url.pathname.startsWith("/v1/sessions/")) {
     const id = url.pathname.slice("/v1/sessions/".length);
-    const tenantId = url.searchParams.get("tenantId") ?? undefined;
+    const tenantId = url.searchParams.get("tenantId")?.trim() ?? "";
+    const tenantErr = validateTenantId(tenantId);
+    if (tenantErr) return jsonError(tenantErr, 400);
     const session = getSession(loadConfig(), id, tenantId);
-    if (!session) return Response.json({ error: "sesión no encontrada" }, { status: 404 });
+    if (!session) return jsonError("sesión no encontrada", 404);
     return Response.json(session);
   }
 
   if (req.method === "DELETE" && url.pathname.startsWith("/v1/sessions/")) {
     const id = url.pathname.slice("/v1/sessions/".length);
-    const ok = deleteSession(loadConfig(), id);
-    if (!ok) return Response.json({ error: "sesión no encontrada" }, { status: 404 });
+    const tenantId = url.searchParams.get("tenantId")?.trim() ?? "";
+    const tenantErr = validateTenantId(tenantId);
+    if (tenantErr) return jsonError(tenantErr, 400);
+    const ok = deleteSession(loadConfig(), id, tenantId);
+    if (!ok) return jsonError("sesión no encontrada", 404);
     return Response.json({ ok: true });
   }
 
   if (req.method === "POST" && url.pathname === "/v1/query") {
-    const body = await parseJson(req);
-    if (!body) return Response.json({ error: "JSON inválido" }, { status: 400 });
+    const parsed = await parseBody(req);
+    if ("error" in parsed) return parsed.error;
+    const body = parsed.body;
     const query = String(body.query ?? "").trim();
-    if (!query) return Response.json({ error: "query requerida" }, { status: 400 });
+    const queryErr = validateQuery(query);
+    if (queryErr) return jsonError(queryErr, 400);
     const sessionId = body.sessionId ? String(body.sessionId) : undefined;
     const tenantId = body.tenantId ? String(body.tenantId) : undefined;
+    if (tenantId) {
+      const tenantErr = validateTenantId(tenantId);
+      if (tenantErr) return jsonError(tenantErr, 400);
+    }
     const signal = requestSignal(req, ctx.requestTimeoutMs);
     const cacheKey = idempotencyKey(req.headers.get("Idempotency-Key"), query, sessionId, tenantId);
     if (cacheKey) {
@@ -163,7 +191,10 @@ const route = async (
       return new Response(payload, { headers: { "Content-Type": "application/json" } });
     } catch (err) {
       if (signal.aborted) {
-        return Response.json({ error: "request_timeout" }, { status: 504 });
+        return jsonError("request_timeout", 504);
+      }
+      if (err instanceof SessionTenantMismatchError) {
+        return jsonError(err.message, 403);
       }
       if (err instanceof MageApiError) {
         return Response.json({ error: err.message, retryAfterSec: err.retryAfterSec }, { status: 503 });
@@ -173,12 +204,18 @@ const route = async (
   }
 
   if (req.method === "POST" && url.pathname === "/v1/query/stream") {
-    const body = await parseJson(req);
-    if (!body) return Response.json({ error: "JSON inválido" }, { status: 400 });
+    const parsed = await parseBody(req);
+    if ("error" in parsed) return parsed.error;
+    const body = parsed.body;
     const query = String(body.query ?? "").trim();
-    if (!query) return Response.json({ error: "query requerida" }, { status: 400 });
+    const queryErr = validateQuery(query);
+    if (queryErr) return jsonError(queryErr, 400);
     const sessionId = body.sessionId ? String(body.sessionId) : undefined;
     const tenantId = body.tenantId ? String(body.tenantId) : undefined;
+    if (tenantId) {
+      const tenantErr = validateTenantId(tenantId);
+      if (tenantErr) return jsonError(tenantErr, 400);
+    }
     const signal = requestSignal(req, ctx.requestTimeoutMs);
 
     const stream = new ReadableStream({
@@ -206,6 +243,8 @@ const route = async (
         } catch (err) {
           if (signal.aborted) {
             send("error", { message: "request_timeout" });
+          } else if (err instanceof SessionTenantMismatchError) {
+            send("error", { message: err.message });
           } else if (err instanceof MageApiError) {
             send("error", { message: err.message, retryAfterSec: err.retryAfterSec });
           } else {
@@ -228,21 +267,27 @@ const route = async (
   }
 
   if (req.method === "POST" && url.pathname === "/v1/memory") {
-    const body = await parseJson(req);
-    if (!body) return Response.json({ error: "JSON inválido" }, { status: 400 });
+    const parsed = await parseBody(req);
+    if ("error" in parsed) return parsed.error;
+    const body = parsed.body;
     const factsRaw = body.facts;
     if (!Array.isArray(factsRaw) || factsRaw.length === 0) {
-      return Response.json({ error: "facts[] requerido" }, { status: 400 });
+      return jsonError("facts[] requerido", 400);
+    }
+    if (factsRaw.length > MAX_FACTS_PER_REQUEST) {
+      return jsonError(`facts[] máximo ${MAX_FACTS_PER_REQUEST}`, 400);
     }
     const facts = factsRaw.flatMap((f) => {
       const p = FactInputSchema.safeParse(f);
       return p.success ? [p.data] : [];
     });
-    if (facts.length === 0) return Response.json({ error: "facts inválidos" }, { status: 400 });
-    const tenantId = body.tenantId ? String(body.tenantId) : "default";
+    if (facts.length === 0) return jsonError("facts inválidos", 400);
+    const tenantRaw = body.tenantId ? String(body.tenantId) : "default";
+    const tenantErr = validateTenantId(tenantRaw);
+    if (tenantErr) return jsonError(tenantErr, 400);
     const source = body.source ? String(body.source) : undefined;
     const rt = await getRuntime();
-    const result = rt.facts.ingest({ tenantId, source, facts });
+    const result = rt.facts.ingest({ tenantId: tenantRaw.trim(), source, facts });
     const status = result.conflicts.length > 0 && result.upserted === 0 ? 409 : 200;
     return Response.json(result, { status });
   }

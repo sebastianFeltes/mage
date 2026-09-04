@@ -61,7 +61,7 @@ describe("session store sqlite", () => {
   test("delete elimina sesión", () => {
     const store = open();
     const s = store.create();
-    expect(store.delete(s.id)).toBe(true);
+    expect(store.delete(s.id, "default")).toBe(true);
     expect(store.get(s.id)).toBeNull();
   });
 

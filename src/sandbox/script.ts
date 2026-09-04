@@ -20,6 +20,8 @@ export type ScriptRunResult = {
 
 const BLOCKED = [
   /\bBun\.spawn\b/,
+  /\bBun\.write\b/,
+  /\bBun\.file\b/,
   /\bchild_process\b/,
   /\bDeno\.(?:run|spawn)\b/,
   /\bfetch\s*\(/,
@@ -29,6 +31,7 @@ const BLOCKED = [
   /\bprocess\.env\b/,
   /\bwriteFile\b|\bappendFile\b|\bunlink\s*\(/,
   /\brmSync\b|\bunlinkSync\b/,
+  /\beval\s*\(/,
   /\/proc\//,
 ];
 

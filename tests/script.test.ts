@@ -28,6 +28,13 @@ return xs.reduce((a, b) => a + b, 0);
     expect(runner.run({ code: 'await fetch("http://x")' })).rejects.toThrow(/bloqueado/);
   });
 
+  test("bloquea Bun.write y eval", async () => {
+    const cfg = { ...loadConfig(), scriptEnabled: true, scriptTimeoutMs: 1000 };
+    const runner = new ScriptRunner(cfg);
+    expect(runner.run({ code: 'await Bun.write("/tmp/x", "y")' })).rejects.toThrow(/bloqueado/);
+    expect(runner.run({ code: "eval('1')" })).rejects.toThrow(/bloqueado/);
+  });
+
   test("deshabilitado sin env", async () => {
     const cfg = { ...loadConfig(), scriptEnabled: false, scriptTimeoutMs: 1000 };
     const runner = new ScriptRunner(cfg);

@@ -229,8 +229,6 @@ export class ToolRegistry {
   }
 }
 
-export const toolCatalogLine = (): string => new ToolRegistry().catalogLine();
-
 export async function dispatchTool(
   name: string,
   input: unknown,

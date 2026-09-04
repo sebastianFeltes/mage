@@ -122,8 +122,10 @@ export class SqliteSessionStore implements SessionStore {
     return rows.map((r) => r.id);
   }
 
-  delete(id: string): boolean {
-    const res = this.db.query("DELETE FROM sessions WHERE id = ?").run(id);
+  delete(id: string, tenantId: string): boolean {
+    const res = this.db
+      .query("DELETE FROM sessions WHERE id = ? AND tenant_id = ?")
+      .run(id, normalizeTenant(tenantId));
     return res.changes > 0;
   }
 

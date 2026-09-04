@@ -56,24 +56,74 @@ describe("http sessions", () => {
     const port = typeof addr === "object" && addr ? addr.port : 3920;
     base = `http://127.0.0.1:${port}`;
 
-    const created = await fetch(`${base}/v1/sessions`, { method: "POST" });
-    const { sessionId } = (await created.json()) as { sessionId: string };
+    const created = await fetch(`${base}/v1/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    expect(created.status).toBe(200);
+    const { sessionId, tenantId } = (await created.json()) as { sessionId: string; tenantId: string };
     expect(sessionId).toBeTruthy();
+    expect(tenantId).toBe("default");
 
     const q1 = await fetch(`${base}/v1/query`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: "hash de mage", sessionId }),
+      body: JSON.stringify({ query: "hash de mage", sessionId, tenantId }),
     });
     const r1 = (await q1.json()) as { sessionId: string; answer: string };
     expect(r1.sessionId).toBe(sessionId);
     expect(r1.answer.length).toBeGreaterThan(0);
 
-    const got = await fetch(`${base}/v1/sessions/${sessionId}`);
+    const noTenant = await fetch(`${base}/v1/sessions/${sessionId}`);
+    expect(noTenant.status).toBe(400);
+
+    const got = await fetch(`${base}/v1/sessions/${sessionId}?tenantId=${tenantId}`);
     const session = (await got.json()) as { turns: unknown[] };
     expect(session.turns.length).toBeGreaterThanOrEqual(2);
 
-    const del = await fetch(`${base}/v1/sessions/${sessionId}`, { method: "DELETE" });
+    const wrongTenant = await fetch(`${base}/v1/sessions/${sessionId}?tenantId=other`);
+    expect(wrongTenant.status).toBe(404);
+
+    const delNoTenant = await fetch(`${base}/v1/sessions/${sessionId}`, { method: "DELETE" });
+    expect(delNoTenant.status).toBe(400);
+
+    const del = await fetch(`${base}/v1/sessions/${sessionId}?tenantId=${tenantId}`, { method: "DELETE" });
     expect((await del.json()).ok).toBe(true);
+  });
+});
+
+describe("http session tenant", () => {
+  let base = "";
+  let server: ReturnType<typeof Bun.serve> | Awaited<ReturnType<typeof startServer>>;
+
+  afterAll(() => {
+    server?.stop();
+    resetRuntime();
+    resetSessionStore();
+  });
+
+  test("query con sessionId de otro tenant → 403", async () => {
+    resetRuntime();
+    resetSessionStore();
+    server = await startServer({ port: 0, hostname: "127.0.0.1", apiKey: null });
+    const addr = server.address;
+    const port = typeof addr === "object" && addr ? addr.port : 3920;
+    base = `http://127.0.0.1:${port}`;
+
+    const created = await fetch(`${base}/v1/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tenantId: "acme" }),
+    });
+    const { sessionId } = (await created.json()) as { sessionId: string };
+
+    const res = await fetch(`${base}/v1/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "cuánto es 1+1", sessionId, tenantId: "globex" }),
+    });
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toBe("session_tenant_mismatch");
   });
 });

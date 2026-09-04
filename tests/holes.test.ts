@@ -93,7 +93,8 @@ describe("agujeros de producto", () => {
     try {
       const rt = await stubRt();
       const result = await runMage("guarda el PIB 999", rt);
-      expect(result.status).toBe("refused");
+      expect(result.status).toBe("error");
+      expect(result.refusalReason).toBe("tool_failed");
       expect(rt.facts.lookup("default", "pib")).toBeNull();
     } finally {
       if (prev === undefined) delete process.env.MAGE_STUB_PLAN;
